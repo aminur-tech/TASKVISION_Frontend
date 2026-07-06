@@ -17,9 +17,23 @@ interface AuthState {
   logout: () => void;
 }
 
+const getInitialAuthState = () => {
+  if (typeof window === 'undefined') {
+    return { user: null, token: null };
+  }
+
+  const storedUser = Cookies.get('user');
+  return {
+    user: storedUser ? JSON.parse(storedUser) : null,
+    token: Cookies.get('token') || null,
+  };
+};
+
+const initialAuthState = getInitialAuthState();
+
 export const useAuthStore = create<AuthState>((set) => ({
-  user: Cookies.get('user') ? JSON.parse(Cookies.get('user')!) : null,
-  token: Cookies.get('token') || null,
+  user: initialAuthState.user,
+  token: initialAuthState.token,
   loading: false,
   error: null,
 

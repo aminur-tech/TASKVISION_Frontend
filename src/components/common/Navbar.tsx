@@ -1,13 +1,27 @@
 "use client";
-import { useState } from 'react';
-import { Menu, X, ChevronDown, User, LogOut, Settings } from 'lucide-react';
+import { useState, useSyncExternalStore } from 'react';
+import { Menu, X, ChevronDown, LogOut, Settings } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 
+function useHydrated() {
+  return useSyncExternalStore(
+    (callback) => {
+      if (typeof window === 'undefined') return () => {};
+
+      const timeoutId = window.setTimeout(callback, 0);
+      return () => window.clearTimeout(timeoutId);
+    },
+    () => true,
+    () => false
+  );
+}
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const { user, logout } = useAuthStore();
+  const isHydrated = useHydrated();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.08] bg-slate-950/70 backdrop-blur-md transition-all duration-300">
@@ -31,7 +45,9 @@ export function Navbar() {
 
           {/* User Auth Action Group */}
           <div className="hidden md:flex items-center gap-4">
-            {user ? (
+            {!isHydrated ? (
+              <div className="h-9 w-24 rounded-xl bg-slate-800/70" />
+            ) : user ? (
               <div className="relative">
                 <button 
                   onClick={() => setProfileOpen(!profileOpen)}
