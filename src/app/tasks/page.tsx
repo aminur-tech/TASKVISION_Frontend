@@ -1,11 +1,12 @@
+import TaskBoard from '@/components/tasks/Board';
 import React from 'react';
 
-const Task = () => {
+const TasksPage = () => {
     return (
         <div>
-            
+            <TaskBoard />
         </div>
     );
 };
 
-export default Task;
+export default TasksPage;
