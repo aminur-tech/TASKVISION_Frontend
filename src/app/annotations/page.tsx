@@ -206,17 +206,17 @@ export default function AdvancedAnnotationWorkspace() {
   const currentRightImage = images[rightIndex];
 
   return (
-    <main className="min-h-screen bg-[#f8f9fa] p-16 font-sans text-gray-800">
+    <main className="min-h-screen bg-slate-950 p-16 font-sans text-slate-100">
       {/* Top Workspace Controls / Upload Header Panel */}
-      <div className="mx-auto max-w-[1200px] mb-4 flex flex-wrap items-center justify-between gap-4 bg-white border border-gray-200 rounded shadow-sm px-4 py-3">
+      <div className="mx-auto max-w-[1200px] mb-4 flex flex-wrap items-center justify-between gap-4 bg-slate-900/90 border border-white/10 rounded-xl shadow-sm px-4 py-3">
         <div>
-          <h1 className="text-sm font-bold tracking-tight text-gray-900">
+          <h1 className="text-sm font-bold tracking-tight text-white">
             Advanced Segment Analytics Matrix
           </h1>
-          <p className="text-[11px] text-gray-500">Synchronized structural medical visualization engine</p>
+          <p className="text-[11px] text-slate-400">Synchronized structural medical visualization engine</p>
         </div>
         
-        <label className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white transition px-3 py-1.5 rounded cursor-pointer text-xs font-semibold shadow-sm">
+        <label className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white transition px-3 py-1.5 rounded cursor-pointer text-xs font-semibold shadow-sm">
           <Upload className="h-3.5 w-3.5" /> Upload Image Batch
           <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} />
         </label>
@@ -225,22 +225,22 @@ export default function AdvancedAnnotationWorkspace() {
       <div className="mx-auto max-w-[1200px] grid grid-cols-1 xl:grid-cols-2 gap-4">
         
         {/* ================= LEFT VIEWPORT (AXIAL) ================= */}
-        <div className="bg-white border border-gray-200 rounded shadow-sm p-3 flex flex-col">
+        <div className="bg-slate-950 border border-slate-800 rounded-xl shadow-sm p-3 flex flex-col">
           {/* Top Config Row */}
-          <div className="flex flex-wrap items-center justify-between gap-2 bg-gray-50 p-2 border border-gray-200 rounded mb-3 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-950 p-2 border border-slate-800 rounded-lg mb-3 text-xs">
             <div className="flex items-center gap-1.5">
               <button 
                 onClick={() => selectLeftImage(leftIndex - 1)}
-                className="p-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition"
+                className="p-1 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <span className="font-bold text-gray-700 min-w-[90px] text-center">
+              <span className="font-bold text-slate-200 min-w-[90px] text-center">
                 Axial ({images.length > 0 ? leftIndex + 1 : 1}/{images.length || 75})
               </span>
               <button 
                 onClick={() => selectLeftImage(leftIndex + 1)}
-                className="p-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition"
+                className="p-1 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -248,11 +248,11 @@ export default function AdvancedAnnotationWorkspace() {
 
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1">
-                <span className="text-gray-600 font-medium">Select Class:</span>
+                <span className="text-slate-300 font-medium">Select Class:</span>
                 <select 
                   value={selectedClassLeft} 
                   onChange={(e) => setSelectedClassLeft(e.target.value)}
-                  className="bg-white border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none"
+                  className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none"
                 >
                   <option value="Tumor">Tumor</option>
                   <option value="Node">Lymph Node</option>
@@ -264,9 +264,9 @@ export default function AdvancedAnnotationWorkspace() {
                   type="checkbox" 
                   checked={hideAnnotationsLeft}
                   onChange={(e) => setHideAnnotationsLeft(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-0 w-3.5 h-3.5" 
+                  className="rounded border-slate-700 text-indigo-600 focus:ring-0 w-3.5 h-3.5" 
                 />
-                <span>Hide Annotations</span>
+                <span className="text-slate-300">Hide Annotations</span>
               </label>
 
               <label className="flex items-center gap-1 cursor-pointer">
@@ -274,9 +274,9 @@ export default function AdvancedAnnotationWorkspace() {
                   type="checkbox" 
                   checked={hideReviewLeft}
                   onChange={(e) => setHideReviewLeft(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-0 w-3.5 h-3.5" 
+                  className="rounded border-slate-700 text-indigo-600 focus:ring-0 w-3.5 h-3.5" 
                 />
-                <span>Hide Review</span>
+                <span className="text-slate-300">Hide Review</span>
               </label>
 
               <label className="flex items-center gap-1 cursor-pointer">
@@ -284,15 +284,15 @@ export default function AdvancedAnnotationWorkspace() {
                   type="checkbox" 
                   checked={applyCTLeft}
                   onChange={(e) => setApplyCTLeft(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-0 w-3.5 h-3.5" 
+                  className="rounded border-slate-700 text-indigo-600 focus:ring-0 w-3.5 h-3.5" 
                 />
-                <span>Apply CT Window</span>
+                <span className="text-slate-300">Apply CT Window</span>
               </label>
             </div>
           </div>
 
           {/* Screen Canvas Area with Live Uploaded Image Frame */}
-          <div className="relative aspect-square w-full bg-black rounded border border-gray-300 overflow-hidden flex items-center justify-center">
+          <div className="relative aspect-square w-full bg-black rounded-lg border border-slate-800 overflow-hidden flex items-center justify-center">
             <div className="relative w-full h-full transition-transform duration-200 ease-out origin-center" style={{ transform: `scale(${zoomLeft})` }}>
               
               {/* Actual Image Render Layer */}
@@ -303,9 +303,9 @@ export default function AdvancedAnnotationWorkspace() {
                   className={`w-full h-full object-contain pointer-events-none select-none ${applyCTLeft ? 'brightness-125 contrast-150 grayscale' : ''}`}
                 />
               ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-gray-500 font-medium text-sm select-none pointer-events-none">
-                  <div className="w-[80%] h-[80%] rounded-full border border-dashed border-gray-800 opacity-40 flex items-center justify-center">
-                    <span className="text-xs text-gray-700">Axial View Frame [{leftIndex + 1}]</span>
+                <div className="absolute inset-0 flex items-center justify-center text-slate-400 font-medium text-sm select-none pointer-events-none">
+                  <div className="w-[80%] h-[80%] rounded-full border border-dashed border-slate-700 opacity-40 flex items-center justify-center">
+                    <span className="text-xs text-slate-300">Axial View Frame [{leftIndex + 1}]</span>
                   </div>
                 </div>
               )}
@@ -341,22 +341,22 @@ export default function AdvancedAnnotationWorkspace() {
           </div>
 
           {/* Bottom Custom Actions Toolbar Row */}
-          <div className="flex items-center justify-between mt-3 bg-gray-50 p-1.5 border border-gray-200 rounded">
+          <div className="flex items-center justify-between mt-3 bg-slate-950 p-1.5 border border-slate-800 rounded-lg">
             <div className="flex items-center gap-1 flex-wrap">
               <button 
                 title="Toggle Segmentation Mode"
                 onClick={() => setIsSegmentingLeft(!isSegmentingLeft)} 
-                className={`p-2 rounded transition relative ${isSegmentingLeft ? 'bg-red-600 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                className={`p-2 rounded transition relative ${isSegmentingLeft ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
               >
                 {isSegmentingLeft ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
               </button>
               
-              <button onClick={() => setZoomLeft(z => Math.min(z + 0.25, 4))} className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition"><ZoomIn className="h-4 w-4" /></button>
-              <button onClick={() => setZoomLeft(z => Math.max(z - 0.25, 1))} className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition"><ZoomOut className="h-4 w-4" /></button>
-              <button onClick={() => setZoomLeft(1)} className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition"><Maximize2 className="h-4 w-4" /></button>
-              <button className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition"><Move className="h-4 w-4" /></button>
-              <button onClick={() => setCurrentPointsLeft(p => p.slice(0, -1))} className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition"><Undo2 className="h-4 w-4" /></button>
-              <button onClick={() => { setPolygonsLeft([]); setCurrentPointsLeft([]); }} className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition"><RotateCw className="h-4 w-4" /></button>
+              <button onClick={() => setZoomLeft(z => Math.min(z + 0.25, 4))} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><ZoomIn className="h-4 w-4" /></button>
+              <button onClick={() => setZoomLeft(z => Math.max(z - 0.25, 1))} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><ZoomOut className="h-4 w-4" /></button>
+              <button onClick={() => setZoomLeft(1)} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><Maximize2 className="h-4 w-4" /></button>
+              <button className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><Move className="h-4 w-4" /></button>
+              <button onClick={() => setCurrentPointsLeft(p => p.slice(0, -1))} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><Undo2 className="h-4 w-4" /></button>
+              <button onClick={() => { setPolygonsLeft([]); setCurrentPointsLeft([]); }} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><RotateCw className="h-4 w-4" /></button>
 
               {currentPointsLeft.length >= 3 && (
                 <button 
@@ -367,27 +367,27 @@ export default function AdvancedAnnotationWorkspace() {
                 </button>
               )}
             </div>
-            <span className="text-[11px] font-semibold text-gray-500 mr-2 uppercase tracking-wider">Series Review: Axial</span>
+            <span className="text-[11px] font-semibold text-slate-400 mr-2 uppercase tracking-wider">Series Review: Axial</span>
           </div>
         </div>
 
         {/* ================= RIGHT VIEWPORT (SAGITTAL) ================= */}
-        <div className="bg-white border border-gray-200 rounded shadow-sm p-3 flex flex-col">
+        <div className="bg-slate-950 border border-slate-800 rounded-xl shadow-sm p-3 flex flex-col">
           {/* Top Config Row */}
-          <div className="flex flex-wrap items-center justify-between gap-2 bg-gray-50 p-2 border border-gray-200 rounded mb-3 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-950 p-2 border border-slate-800 rounded-lg mb-3 text-xs">
             <div className="flex items-center gap-1.5">
               <button 
                 onClick={() => selectRightImage(rightIndex - 1)}
-                className="p-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition"
+                className="p-1 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <span className="font-bold text-gray-700 min-w-[90px] text-center">
+              <span className="font-bold text-slate-200 min-w-[90px] text-center">
                 Sagittal ({images.length > 0 ? rightIndex + 1 : 1}/{images.length || 232})
               </span>
               <button 
                 onClick={() => selectRightImage(rightIndex + 1)}
-                className="p-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition"
+                className="p-1 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -395,11 +395,11 @@ export default function AdvancedAnnotationWorkspace() {
 
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1">
-                <span className="text-gray-600 font-medium">Select Class:</span>
+                <span className="text-slate-300 font-medium">Select Class:</span>
                 <select 
                   value={selectedClassRight} 
                   onChange={(e) => setSelectedClassRight(e.target.value)}
-                  className="bg-white border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none"
+                  className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none"
                 >
                   <option value="Tumor">Tumor</option>
                   <option value="Node">Lymph Node</option>
@@ -411,9 +411,9 @@ export default function AdvancedAnnotationWorkspace() {
                   type="checkbox" 
                   checked={hideAnnotationsRight}
                   onChange={(e) => setHideAnnotationsRight(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-0 w-3.5 h-3.5" 
+                  className="rounded border-slate-700 text-indigo-600 focus:ring-0 w-3.5 h-3.5" 
                 />
-                <span>Hide Annotations</span>
+                <span className="text-slate-300">Hide Annotations</span>
               </label>
 
               <label className="flex items-center gap-1 cursor-pointer">
@@ -421,9 +421,9 @@ export default function AdvancedAnnotationWorkspace() {
                   type="checkbox" 
                   checked={hideReviewRight}
                   onChange={(e) => setHideReviewRight(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-0 w-3.5 h-3.5" 
+                  className="rounded border-slate-700 text-indigo-600 focus:ring-0 w-3.5 h-3.5" 
                 />
-                <span>Hide Review</span>
+                <span className="text-slate-300">Hide Review</span>
               </label>
 
               <label className="flex items-center gap-1 cursor-pointer">
@@ -431,15 +431,15 @@ export default function AdvancedAnnotationWorkspace() {
                   type="checkbox" 
                   checked={applyCTRight}
                   onChange={(e) => setApplyCTRight(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-0 w-3.5 h-3.5" 
+                  className="rounded border-slate-700 text-indigo-600 focus:ring-0 w-3.5 h-3.5" 
                 />
-                <span>Apply CT Window</span>
+                <span className="text-slate-300">Apply CT Window</span>
               </label>
             </div>
           </div>
 
           {/* Screen Canvas Area with Live Uploaded Image Frame */}
-          <div className="relative aspect-square w-full bg-black rounded border border-gray-300 overflow-hidden flex items-center justify-center">
+          <div className="relative aspect-square w-full bg-black rounded-lg border border-slate-800 overflow-hidden flex items-center justify-center">
             <div className="relative w-full h-full transition-transform duration-200 ease-out origin-center" style={{ transform: `scale(${zoomRight})` }}>
               
               {/* Actual Image Render Layer */}
@@ -450,9 +450,9 @@ export default function AdvancedAnnotationWorkspace() {
                   className={`w-full h-full object-contain pointer-events-none select-none ${applyCTRight ? 'brightness-125 contrast-150 grayscale' : ''}`}
                 />
               ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-gray-500 font-medium text-sm select-none pointer-events-none">
-                  <div className="w-[80%] h-[80%] rounded-xl border border-dashed border-gray-800 opacity-40 flex items-center justify-center">
-                    <span className="text-xs text-gray-700">Sagittal View Frame [{rightIndex + 1}]</span>
+                <div className="absolute inset-0 flex items-center justify-center text-slate-400 font-medium text-sm select-none pointer-events-none">
+                  <div className="w-[80%] h-[80%] rounded-xl border border-dashed border-slate-700 opacity-40 flex items-center justify-center">
+                    <span className="text-xs text-slate-300">Sagittal View Frame [{rightIndex + 1}]</span>
                   </div>
                 </div>
               )}
@@ -488,22 +488,22 @@ export default function AdvancedAnnotationWorkspace() {
           </div>
 
           {/* Bottom Custom Actions Toolbar Row */}
-          <div className="flex items-center justify-between mt-3 bg-gray-50 p-1.5 border border-gray-200 rounded">
+          <div className="flex items-center justify-between mt-3 bg-slate-950 p-1.5 border border-slate-800 rounded-lg">
             <div className="flex items-center gap-1 flex-wrap">
               <button 
                 title="Toggle Segmentation Mode"
                 onClick={() => setIsSegmentingRight(!isSegmentingRight)} 
-                className={`p-2 rounded transition relative ${isSegmentingRight ? 'bg-red-600 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                className={`p-2 rounded transition relative ${isSegmentingRight ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
               >
                 {isSegmentingRight ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
               </button>
               
-              <button onClick={() => setZoomRight(z => Math.min(z + 0.25, 4))} className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition"><ZoomIn className="h-4 w-4" /></button>
-              <button onClick={() => setZoomRight(z => Math.max(z - 0.25, 1))} className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition"><ZoomOut className="h-4 w-4" /></button>
-              <button onClick={() => setZoomRight(1)} className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition"><Maximize2 className="h-4 w-4" /></button>
-              <button className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition"><Move className="h-4 w-4" /></button>
-              <button onClick={() => setCurrentPointsRight(p => p.slice(0, -1))} className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition"><Undo2 className="h-4 w-4" /></button>
-              <button onClick={() => { setPolygonsRight([]); setCurrentPointsRight([]); }} className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition"><RotateCw className="h-4 w-4" /></button>
+              <button onClick={() => setZoomRight(z => Math.min(z + 0.25, 4))} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><ZoomIn className="h-4 w-4" /></button>
+              <button onClick={() => setZoomRight(z => Math.max(z - 0.25, 1))} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><ZoomOut className="h-4 w-4" /></button>
+              <button onClick={() => setZoomRight(1)} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><Maximize2 className="h-4 w-4" /></button>
+              <button className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><Move className="h-4 w-4" /></button>
+              <button onClick={() => setCurrentPointsRight(p => p.slice(0, -1))} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><Undo2 className="h-4 w-4" /></button>
+              <button onClick={() => { setPolygonsRight([]); setCurrentPointsRight([]); }} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><RotateCw className="h-4 w-4" /></button>
 
               {currentPointsRight.length >= 3 && (
                 <button 
@@ -514,7 +514,7 @@ export default function AdvancedAnnotationWorkspace() {
                 </button>
               )}
             </div>
-            <span className="text-[11px] font-semibold text-gray-500 mr-2 uppercase tracking-wider">Series Review: Sagittal</span>
+            <span className="text-[11px] font-semibold text-slate-400 mr-2 uppercase tracking-wider">Series Review: Sagittal</span>
           </div>
         </div>
 
