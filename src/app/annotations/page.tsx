@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import Cookies from 'js-cookie';
 import { 
   ChevronLeft, ChevronRight, Scissors, ZoomIn, ZoomOut, 
-  Maximize2, Move, Undo2, RotateCw, X, Check, Upload
+  Maximize2, Undo2, RotateCw, X, Check, Upload, Trash2
 } from 'lucide-react';
 
 interface Point {
@@ -21,7 +21,7 @@ interface Polygon {
 
 interface DBImage {
   id: number;
-  image: string; // Dynamic source string (URL / base64 image data string)
+  image: string;
   uploaded_at: string;
   polygons: Array<{
     id: number;
@@ -34,29 +34,25 @@ interface DBImage {
 export default function AdvancedAnnotationWorkspace() {
   const [images, setImages] = useState<DBImage[]>([]);
   
-  // Viewports index tracking
   const [leftIndex, setLeftIndex] = useState<number>(23);
   const [rightIndex, setRightIndex] = useState<number>(0);
 
-  // --- Controls & Toggle Options ---
   const [selectedClassLeft, setSelectedClassLeft] = useState<string>('Tumor');
   const [hideAnnotationsLeft, setHideAnnotationsLeft] = useState<boolean>(false);
-  const [hideReviewLeft, setHideReviewLeft] = useState<boolean>(false);
   const [applyCTLeft, setApplyCTLeft] = useState<boolean>(false);
 
   const [selectedClassRight, setSelectedClassRight] = useState<string>('Tumor');
   const [hideAnnotationsRight, setHideAnnotationsRight] = useState<boolean>(false);
-  const [hideReviewRight, setHideReviewRight] = useState<boolean>(false);
   const [applyCTRight, setApplyCTRight] = useState<boolean>(false);
 
-  // --- Zoom, Pan & Mode States ---
   const [zoomLeft, setZoomLeft] = useState<number>(1);
   const [isSegmentingLeft, setIsSegmentingLeft] = useState<boolean>(false);
+  const [clickToZoomLeft, setClickToZoomLeft] = useState<boolean>(true);
   
   const [zoomRight, setZoomRight] = useState<number>(1);
   const [isSegmentingRight, setIsSegmentingRight] = useState<boolean>(false);
+  const [clickToZoomRight, setClickToZoomRight] = useState<boolean>(true);
 
-  // Drawing point arrays
   const [polygonsLeft, setPolygonsLeft] = useState<Polygon[]>([]);
   const [currentPointsLeft, setCurrentPointsLeft] = useState<Point[]>([]);
   const svgLeftRef = useRef<SVGSVGElement | null>(null);
@@ -81,7 +77,6 @@ export default function AdvancedAnnotationWorkspace() {
     try {
       const token = Cookies.get('token');
       if (!token) {
-        // Fallback baseline mock images
         const mockImages: DBImage[] = Array.from({ length: 75 }, (_, i) => ({
           id: i + 1,
           image: '/api/placeholder/600/400',
@@ -98,8 +93,9 @@ export default function AdvancedAnnotationWorkspace() {
       if (res.ok) {
         const data: DBImage[] = await res.json();
         const { leftIndex: currentLeftIndex, rightIndex: currentRightIndex } = selectionRef.current;
-        const nextLeftIndex = Math.min(currentLeftIndex, Math.max(data.length - 1, 0));
-        const nextRightIndex = data.length > 1 && currentRightIndex === 0 ? 1 : currentRightIndex;
+        
+        const nextLeftIndex = data.length > 0 ? Math.min(currentLeftIndex, data.length - 1) : 0;
+        const nextRightIndex = data.length > 0 ? Math.min(currentRightIndex, data.length - 1) : 0;
 
         setImages(data);
         setLeftIndex(nextLeftIndex);
@@ -120,7 +116,6 @@ export default function AdvancedAnnotationWorkspace() {
     const timeoutId = window.setTimeout(() => {
       void fetchWorkspaceData();
     }, 0);
-
     return () => window.clearTimeout(timeoutId);
   }, [fetchWorkspaceData]);
 
@@ -141,27 +136,68 @@ export default function AdvancedAnnotationWorkspace() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const token = Cookies.get('token');
-    if (!token) {
-      alert("Local mock session active. Backend token required to persist uploaded batches.");
-      return;
-    }
+    if (!token) return;
 
     for (let i = 0; i < e.target.files.length; i++) {
       const formData = new FormData();
       formData.append('image', e.target.files[i]);
-
       try {
         const res = await fetch('http://localhost:8000/api/annotations/images/', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
           body: formData
         });
-        if (res.ok) {
-          await fetchWorkspaceData();
-        }
+        if (res.ok) await fetchWorkspaceData();
       } catch (err) {
         console.error(err);
       }
+    }
+  };
+
+  const handleDeleteImage = async (viewport: 'left' | 'right') => {
+    const activeIndex = viewport === 'left' ? leftIndex : rightIndex;
+    const targetImage = images[activeIndex];
+    if (!targetImage || !confirm(`Are you sure you want to permanently delete image ID ${targetImage.id}?`)) return;
+
+    const token = Cookies.get('token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`http://localhost:8000/api/annotations/images/${targetImage.id}/`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) await fetchWorkspaceData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeletePolygon = async (polyId?: string, target?: 'left' | 'right') => {
+    const activeTarget = target ?? 'left';
+    const currentPolygons = activeTarget === 'left' ? polygonsLeft : polygonsRight;
+    const resolvedPolyId = polyId ?? currentPolygons[currentPolygons.length - 1]?.id;
+
+    if (!resolvedPolyId) return;
+    if (!confirm("Are you sure you want to delete this specific polygon?")) return;
+
+    if (activeTarget === 'left') {
+      setPolygonsLeft(prev => prev.filter(p => p.id !== resolvedPolyId));
+    } else {
+      setPolygonsRight(prev => prev.filter(p => p.id !== resolvedPolyId));
+    }
+
+    const token = Cookies.get('token');
+    if (!token) return;
+
+    try {
+      await fetch(`http://localhost:8000/api/annotations/polygons/${resolvedPolyId}/`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      await fetchWorkspaceData();
+    } catch (err) {
+      console.error("Error deleting polygon:", err);
     }
   };
 
@@ -169,7 +205,6 @@ export default function AdvancedAnnotationWorkspace() {
     e: React.MouseEvent<SVGSVGElement>, 
     ref: React.RefObject<SVGSVGElement | null>, 
     setPoints: React.Dispatch<React.SetStateAction<Point[]>>,
-    currentZoom: number,
     segmentingMode: boolean
   ) => {
     if (!ref.current || !segmentingMode) return;
@@ -179,43 +214,58 @@ export default function AdvancedAnnotationWorkspace() {
     setPoints(prev => [...prev, { x, y }]);
   };
 
-  const saveCurrentShape = (target: 'left' | 'right') => {
+  const handleImageZoom = (target: 'left' | 'right') => {
     if (target === 'left') {
-      if (currentPointsLeft.length < 3) return;
-      const newPoly: Polygon = {
-        id: Date.now().toString(),
-        points: currentPointsLeft,
-        label: selectedClassLeft
-      };
-      setPolygonsLeft(prev => [...prev, newPoly]);
-      setCurrentPointsLeft([]);
+      setZoomLeft(prev => Math.min(prev + 0.25, 4));
     } else {
-      if (currentPointsRight.length < 3) return;
-      const newPoly: Polygon = {
-        id: Date.now().toString(),
-        points: currentPointsRight,
-        label: selectedClassRight
-      };
-      setPolygonsRight(prev => [...prev, newPoly]);
-      setCurrentPointsRight([]);
+      setZoomRight(prev => Math.min(prev + 0.25, 4));
     }
   };
 
-  // Safe reference getters for active image assets
-  const currentLeftImage = images[leftIndex];
-  const currentRightImage = images[rightIndex];
+  const saveCurrentShape = async (target: 'left' | 'right') => {
+    const token = Cookies.get('token');
+    const isLeft = target === 'left';
+    const points = isLeft ? currentPointsLeft : currentPointsRight;
+    const label = isLeft ? selectedClassLeft : selectedClassRight;
+    const currentImg = isLeft ? images[leftIndex] : images[rightIndex];
+
+    if (points.length < 3 || !currentImg) return;
+
+    const localFallbackId = Date.now().toString();
+    const tentativePoly: Polygon = { id: localFallbackId, points, label };
+    
+    if (isLeft) {
+      setPolygonsLeft(prev => [...prev, tentativePoly]);
+      setCurrentPointsLeft([]);
+    } else {
+      setPolygonsRight(prev => [...prev, tentativePoly]);
+      setCurrentPointsRight([]);
+    }
+
+    if (!token) return;
+
+    try {
+      const res = await fetch('http://localhost:8000/api/annotations/polygons/', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ image: currentImg.id, points, label })
+      });
+      if (res.ok) await fetchWorkspaceData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 p-16 font-sans text-slate-100">
-      {/* Top Workspace Controls / Upload Header Panel */}
-      <div className="mx-auto max-w-[1200px] mb-4 flex flex-wrap items-center justify-between gap-4 bg-slate-900/90 border border-white/10 rounded-xl shadow-sm px-4 py-3">
+      <div className="mx-auto max-w-[1200px] mb-4 flex flex-wrap items-center justify-between gap-4 bg-slate-900/90 border border-white/10 rounded-xl px-4 py-3">
         <div>
-          <h1 className="text-sm font-bold tracking-tight text-white">
-            Advanced Segment Analytics Matrix
-          </h1>
+          <h1 className="text-sm font-bold tracking-tight text-white">Advanced Segment Analytics Matrix</h1>
           <p className="text-[11px] text-slate-400">Synchronized structural medical visualization engine</p>
         </div>
-        
         <label className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white transition px-3 py-1.5 rounded cursor-pointer text-xs font-semibold shadow-sm">
           <Upload className="h-3.5 w-3.5" /> Upload Image Batch
           <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} />
@@ -225,296 +275,154 @@ export default function AdvancedAnnotationWorkspace() {
       <div className="mx-auto max-w-[1200px] grid grid-cols-1 xl:grid-cols-2 gap-4">
         
         {/* ================= LEFT VIEWPORT (AXIAL) ================= */}
-        <div className="bg-slate-950 border border-slate-800 rounded-xl shadow-sm p-3 flex flex-col">
-          {/* Top Config Row */}
+        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col">
           <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-950 p-2 border border-slate-800 rounded-lg mb-3 text-xs">
             <div className="flex items-center gap-1.5">
-              <button 
-                onClick={() => selectLeftImage(leftIndex - 1)}
-                className="p-1 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <span className="font-bold text-slate-200 min-w-[90px] text-center">
-                Axial ({images.length > 0 ? leftIndex + 1 : 1}/{images.length || 75})
-              </span>
-              <button 
-                onClick={() => selectLeftImage(leftIndex + 1)}
-                className="p-1 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
+              <button onClick={() => selectLeftImage(leftIndex - 1)} className="p-1 rounded bg-indigo-600 text-white"><ChevronLeft className="h-4 w-4" /></button>
+              <span className="font-bold text-slate-200 min-w-[90px] text-center">Axial ({images.length > 0 ? leftIndex + 1 : 0}/{images.length})</span>
+              <button onClick={() => selectLeftImage(leftIndex + 1)} className="p-1 rounded bg-indigo-600 text-white"><ChevronRight className="h-4 w-4" /></button>
+              {images[leftIndex] && (
+                <button onClick={() => handleDeleteImage('left')} className="p-1 ml-1 rounded bg-red-950 border border-red-800 text-red-400"><Trash2 className="h-3.5 w-3.5" /></button>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1">
-                <span className="text-slate-300 font-medium">Select Class:</span>
-                <select 
-                  value={selectedClassLeft} 
-                  onChange={(e) => setSelectedClassLeft(e.target.value)}
-                  className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none"
-                >
-                  <option value="Tumor">Tumor</option>
-                  <option value="Node">Lymph Node</option>
-                </select>
-              </div>
-
-              <label className="flex items-center gap-1 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={hideAnnotationsLeft}
-                  onChange={(e) => setHideAnnotationsLeft(e.target.checked)}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-0 w-3.5 h-3.5" 
-                />
-                <span className="text-slate-300">Hide Annotations</span>
-              </label>
-
-              <label className="flex items-center gap-1 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={hideReviewLeft}
-                  onChange={(e) => setHideReviewLeft(e.target.checked)}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-0 w-3.5 h-3.5" 
-                />
-                <span className="text-slate-300">Hide Review</span>
-              </label>
-
-              <label className="flex items-center gap-1 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={applyCTLeft}
-                  onChange={(e) => setApplyCTLeft(e.target.checked)}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-0 w-3.5 h-3.5" 
-                />
-                <span className="text-slate-300">Apply CT Window</span>
-              </label>
+              <select value={selectedClassLeft} onChange={(e) => setSelectedClassLeft(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs">
+                <option value="Tumor">Tumor</option>
+                <option value="Node">Lymph Node</option>
+              </select>
+              <label className="flex items-center gap-1"><input type="checkbox" checked={hideAnnotationsLeft} onChange={(e) => setHideAnnotationsLeft(e.target.checked)} className="rounded border-slate-700 text-indigo-600 w-3.5 h-3.5" /><span>Hide Annotations</span></label>
+              <label className="flex items-center gap-1"><input type="checkbox" checked={applyCTLeft} onChange={(e) => setApplyCTLeft(e.target.checked)} className="rounded border-slate-700 text-indigo-600 w-3.5 h-3.5" /><span>Apply CT Window</span></label>
             </div>
           </div>
 
-          {/* Screen Canvas Area with Live Uploaded Image Frame */}
           <div className="relative aspect-square w-full bg-black rounded-lg border border-slate-800 overflow-hidden flex items-center justify-center">
-            <div className="relative w-full h-full transition-transform duration-200 ease-out origin-center" style={{ transform: `scale(${zoomLeft})` }}>
-              
-              {/* Actual Image Render Layer */}
-              {currentLeftImage?.image ? (
-                <img 
-                  src={currentLeftImage.image} 
-                  alt={`Axial View Frame ${leftIndex + 1}`}
-                  className={`w-full h-full object-contain pointer-events-none select-none ${applyCTLeft ? 'brightness-125 contrast-150 grayscale' : ''}`}
-                />
+            <div
+              className="relative w-full h-full transition-transform duration-200 ease-out origin-center"
+              style={{ transform: `scale(${zoomLeft})` }}
+              onClick={() => {
+                if (!isSegmentingLeft && clickToZoomLeft) handleImageZoom('left');
+              }}
+            >
+              {images[leftIndex]?.image ? (
+                <img src={images[leftIndex].image} alt="Axial View" className={`w-full h-full object-contain pointer-events-none select-none ${applyCTLeft ? 'brightness-125 contrast-150 grayscale' : ''}`} />
               ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-slate-400 font-medium text-sm select-none pointer-events-none">
-                  <div className="w-[80%] h-[80%] rounded-full border border-dashed border-slate-700 opacity-40 flex items-center justify-center">
-                    <span className="text-xs text-slate-300">Axial View Frame [{leftIndex + 1}]</span>
-                  </div>
-                </div>
+                <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">No Image Loaded</div>
               )}
               
-              <svg
-                ref={svgLeftRef}
-                onClick={(e) => handleCanvasClick(e, svgLeftRef, setCurrentPointsLeft, zoomLeft, isSegmentingLeft)}
-                className={`absolute inset-0 w-full h-full z-10 ${isSegmentingLeft ? 'cursor-crosshair' : 'cursor-default'}`}
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-              >
+              <svg ref={svgLeftRef} onClick={(e) => handleCanvasClick(e, svgLeftRef, setCurrentPointsLeft, isSegmentingLeft)} className={`absolute inset-0 w-full h-full z-10 ${isSegmentingLeft ? 'cursor-crosshair' : 'cursor-default'}`} viewBox="0 0 100 100" preserveAspectRatio="none">
                 {!hideAnnotationsLeft && polygonsLeft.map((poly) => (
-                  <polygon 
-                    key={poly.id} 
-                    points={poly.points.map(p => `${p.x},${p.y}`).join(' ')} 
-                    className="fill-red-500/20 stroke-red-600 stroke-[0.4]" 
-                  />
+                  <polygon key={poly.id} points={poly.points.map(p => `${p.x},${p.y}`).join(' ')} className="fill-red-500/20 stroke-red-600 stroke-[0.4]" />
                 ))}
-                {!hideAnnotationsLeft && currentPointsLeft.map((p, idx) => (
-                  <g key={idx}>
-                    <circle cx={p.x} cy={p.y} r="1.2" className="fill-red-600 stroke-white stroke-[0.2]" />
-                    <circle cx={p.x} cy={p.y} r="2.5" className="fill-none stroke-red-400 stroke-[0.15] stroke-dasharray-[0.5,0.5]" />
-                  </g>
-                ))}
-                {!hideAnnotationsLeft && currentPointsLeft.length > 1 && (
-                  <polyline 
-                    points={currentPointsLeft.map(p => `${p.x},${p.y}`).join(' ')} 
-                    className="fill-none stroke-red-500 stroke-[0.3]" 
-                  />
-                )}
+                {!hideAnnotationsLeft && currentPointsLeft.map((p, idx) => <circle key={idx} cx={p.x} cy={p.y} r="1.2" className="fill-red-600 stroke-white stroke-[0.2]" />)}
+                {!hideAnnotationsLeft && currentPointsLeft.length > 1 && <polyline points={currentPointsLeft.map(p => `${p.x},${p.y}`).join(' ')} className="fill-none stroke-red-500 stroke-[0.3]" />}
               </svg>
             </div>
           </div>
 
-          {/* Bottom Custom Actions Toolbar Row */}
+          {/* Bottom Toolbar with Slider Toggle */}
           <div className="flex items-center justify-between mt-3 bg-slate-950 p-1.5 border border-slate-800 rounded-lg">
-            <div className="flex items-center gap-1 flex-wrap">
-              <button 
-                title="Toggle Segmentation Mode"
-                onClick={() => setIsSegmentingLeft(!isSegmentingLeft)} 
-                className={`p-2 rounded transition relative ${isSegmentingLeft ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-              >
-                {isSegmentingLeft ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
+            <div className="flex items-center gap-2 flex-wrap w-full justify-between sm:justify-start">
+              <div className="flex items-center gap-1">
+                <button onClick={() => setIsSegmentingLeft(!isSegmentingLeft)} className={`p-2 rounded ${isSegmentingLeft ? 'bg-red-600' : 'bg-indigo-600'} text-white`}>{isSegmentingLeft ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}</button>
+                <button onClick={() => setZoomLeft(1)} className="p-2 bg-indigo-600 text-white rounded"><Maximize2 className="h-4 w-4" /></button>
+                <button onClick={() => setCurrentPointsLeft(p => p.slice(0, -1))} className="p-2 bg-indigo-600 text-white rounded"><Undo2 className="h-4 w-4" /></button>
+                
+                <button onClick={() => handleDeletePolygon(undefined, 'left')} className="p-2 bg-rose-600 hover:bg-rose-700 text-white rounded" title="Delete Last Polygon"><Trash2 className="h-4 w-4" /></button>
+              </div>
+
+              {/* Line Toggle Zoom Slider */}
+              <div className="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-md border border-slate-800">
+                <ZoomOut className="h-3.5 w-3.5 text-slate-400" />
+                <input type="range" min="1" max="4" step="0.1" value={zoomLeft} onChange={(e) => setZoomLeft(parseFloat(e.target.value))} className="w-24 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                <ZoomIn className="h-3.5 w-3.5 text-slate-400" />
+                <span className="text-[10px] font-mono text-slate-400 w-8">{Math.round(zoomLeft * 100)}%</span>
+              </div>
+
+              <button onClick={() => setClickToZoomLeft(prev => !prev)} className={`px-2.5 py-1 rounded text-[10px] font-semibold ${clickToZoomLeft ? 'bg-emerald-600' : 'bg-slate-700'} text-white`}>
+                Click Zoom {clickToZoomLeft ? 'On' : 'Off'}
               </button>
-              
-              <button onClick={() => setZoomLeft(z => Math.min(z + 0.25, 4))} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><ZoomIn className="h-4 w-4" /></button>
-              <button onClick={() => setZoomLeft(z => Math.max(z - 0.25, 1))} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><ZoomOut className="h-4 w-4" /></button>
-              <button onClick={() => setZoomLeft(1)} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><Maximize2 className="h-4 w-4" /></button>
-              <button className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><Move className="h-4 w-4" /></button>
-              <button onClick={() => setCurrentPointsLeft(p => p.slice(0, -1))} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><Undo2 className="h-4 w-4" /></button>
-              <button onClick={() => { setPolygonsLeft([]); setCurrentPointsLeft([]); }} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><RotateCw className="h-4 w-4" /></button>
 
               {currentPointsLeft.length >= 3 && (
-                <button 
-                  onClick={() => saveCurrentShape('left')}
-                  className="ml-2 px-2.5 py-1.5 bg-green-600 text-white rounded text-xs font-bold flex items-center gap-1 hover:bg-green-700 transition"
-                >
-                  <Check className="h-3.5 w-3.5" /> Commit
-                </button>
+                <button onClick={() => saveCurrentShape('left')} className="px-2.5 py-1.5 bg-green-600 text-white rounded text-xs font-bold flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Save</button>
               )}
             </div>
-            <span className="text-[11px] font-semibold text-slate-400 mr-2 uppercase tracking-wider">Series Review: Axial</span>
           </div>
         </div>
 
         {/* ================= RIGHT VIEWPORT (SAGITTAL) ================= */}
-        <div className="bg-slate-950 border border-slate-800 rounded-xl shadow-sm p-3 flex flex-col">
-          {/* Top Config Row */}
+        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col">
           <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-950 p-2 border border-slate-800 rounded-lg mb-3 text-xs">
             <div className="flex items-center gap-1.5">
-              <button 
-                onClick={() => selectRightImage(rightIndex - 1)}
-                className="p-1 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <span className="font-bold text-slate-200 min-w-[90px] text-center">
-                Sagittal ({images.length > 0 ? rightIndex + 1 : 1}/{images.length || 232})
-              </span>
-              <button 
-                onClick={() => selectRightImage(rightIndex + 1)}
-                className="p-1 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
+              <button onClick={() => selectRightImage(rightIndex - 1)} className="p-1 rounded bg-indigo-600 text-white"><ChevronLeft className="h-4 w-4" /></button>
+              <span className="font-bold text-slate-200 min-w-[90px] text-center">Sagittal ({images.length > 0 ? rightIndex + 1 : 0}/{images.length})</span>
+              <button onClick={() => selectRightImage(rightIndex + 1)} className="p-1 rounded bg-indigo-600 text-white"><ChevronRight className="h-4 w-4" /></button>
+              {images[rightIndex] && (
+                <button onClick={() => handleDeleteImage('right')} className="p-1 ml-1 rounded bg-red-950 border border-red-800 text-red-400"><Trash2 className="h-3.5 w-3.5" /></button>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1">
-                <span className="text-slate-300 font-medium">Select Class:</span>
-                <select 
-                  value={selectedClassRight} 
-                  onChange={(e) => setSelectedClassRight(e.target.value)}
-                  className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-slate-100 focus:outline-none"
-                >
-                  <option value="Tumor">Tumor</option>
-                  <option value="Node">Lymph Node</option>
-                </select>
-              </div>
-
-              <label className="flex items-center gap-1 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={hideAnnotationsRight}
-                  onChange={(e) => setHideAnnotationsRight(e.target.checked)}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-0 w-3.5 h-3.5" 
-                />
-                <span className="text-slate-300">Hide Annotations</span>
-              </label>
-
-              <label className="flex items-center gap-1 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={hideReviewRight}
-                  onChange={(e) => setHideReviewRight(e.target.checked)}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-0 w-3.5 h-3.5" 
-                />
-                <span className="text-slate-300">Hide Review</span>
-              </label>
-
-              <label className="flex items-center gap-1 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={applyCTRight}
-                  onChange={(e) => setApplyCTRight(e.target.checked)}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-0 w-3.5 h-3.5" 
-                />
-                <span className="text-slate-300">Apply CT Window</span>
-              </label>
+              <select value={selectedClassRight} onChange={(e) => setSelectedClassRight(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs">
+                <option value="Tumor">Tumor</option>
+                <option value="Node">Lymph Node</option>
+              </select>
+              <label className="flex items-center gap-1"><input type="checkbox" checked={hideAnnotationsRight} onChange={(e) => setHideAnnotationsRight(e.target.checked)} className="rounded border-slate-700 text-indigo-600 w-3.5 h-3.5" /><span>Hide Annotations</span></label>
+              <label className="flex items-center gap-1"><input type="checkbox" checked={applyCTRight} onChange={(e) => setApplyCTRight(e.target.checked)} className="rounded border-slate-700 text-indigo-600 w-3.5 h-3.5" /><span>Apply CT Window</span></label>
             </div>
           </div>
 
-          {/* Screen Canvas Area with Live Uploaded Image Frame */}
           <div className="relative aspect-square w-full bg-black rounded-lg border border-slate-800 overflow-hidden flex items-center justify-center">
-            <div className="relative w-full h-full transition-transform duration-200 ease-out origin-center" style={{ transform: `scale(${zoomRight})` }}>
-              
-              {/* Actual Image Render Layer */}
-              {currentRightImage?.image ? (
-                <img 
-                  src={currentRightImage.image} 
-                  alt={`Sagittal View Frame ${rightIndex + 1}`}
-                  className={`w-full h-full object-contain pointer-events-none select-none ${applyCTRight ? 'brightness-125 contrast-150 grayscale' : ''}`}
-                />
+            <div
+              className="relative w-full h-full transition-transform duration-200 ease-out origin-center"
+              style={{ transform: `scale(${zoomRight})` }}
+              onClick={() => {
+                if (!isSegmentingRight && clickToZoomRight) handleImageZoom('right');
+              }}
+            >
+              {images[rightIndex]?.image ? (
+                <img src={images[rightIndex].image} alt="Sagittal View" className={`w-full h-full object-contain pointer-events-none select-none ${applyCTRight ? 'brightness-125 contrast-150 grayscale' : ''}`} />
               ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-slate-400 font-medium text-sm select-none pointer-events-none">
-                  <div className="w-[80%] h-[80%] rounded-xl border border-dashed border-slate-700 opacity-40 flex items-center justify-center">
-                    <span className="text-xs text-slate-300">Sagittal View Frame [{rightIndex + 1}]</span>
-                  </div>
-                </div>
+                <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">No Image Loaded</div>
               )}
               
-              <svg
-                ref={svgRightRef}
-                onClick={(e) => handleCanvasClick(e, svgRightRef, setCurrentPointsRight, zoomRight, isSegmentingRight)}
-                className={`absolute inset-0 w-full h-full z-10 ${isSegmentingRight ? 'cursor-crosshair' : 'cursor-default'}`}
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-              >
+              <svg ref={svgRightRef} onClick={(e) => handleCanvasClick(e, svgRightRef, setCurrentPointsRight, isSegmentingRight)} className={`absolute inset-0 w-full h-full z-10 ${isSegmentingRight ? 'cursor-crosshair' : 'cursor-default'}`} viewBox="0 0 100 100" preserveAspectRatio="none">
                 {!hideAnnotationsRight && polygonsRight.map((poly) => (
-                  <polygon 
-                    key={poly.id} 
-                    points={poly.points.map(p => `${p.x},${p.y}`).join(' ')} 
-                    className="fill-blue-500/20 stroke-blue-600 stroke-[0.4]" 
-                  />
+                  <polygon key={poly.id} points={poly.points.map(p => `${p.x},${p.y}`).join(' ')} className="fill-blue-500/20 stroke-blue-600 stroke-[0.4]" />
                 ))}
-                {!hideAnnotationsRight && currentPointsRight.map((p, idx) => (
-                  <g key={idx}>
-                    <circle cx={p.x} cy={p.y} r="1.2" className="fill-blue-600 stroke-white stroke-[0.2]" />
-                    <circle cx={p.x} cy={p.y} r="2.5" className="fill-none stroke-blue-400 stroke-[0.15] stroke-dasharray-[0.5,0.5]" />
-                  </g>
-                ))}
-                {!hideAnnotationsRight && currentPointsRight.length > 1 && (
-                  <polyline 
-                    points={currentPointsRight.map(p => `${p.x},${p.y}`).join(' ')} 
-                    className="fill-none stroke-blue-500 stroke-[0.3]" 
-                  />
-                )}
+                {!hideAnnotationsRight && currentPointsRight.map((p, idx) => <circle key={idx} cx={p.x} cy={p.y} r="1.2" className="fill-blue-600 stroke-white stroke-[0.2]" />)}
+                {!hideAnnotationsRight && currentPointsRight.length > 1 && <polyline points={currentPointsRight.map(p => `${p.x},${p.y}`).join(' ')} className="fill-none stroke-blue-500 stroke-[0.3]" />}
               </svg>
             </div>
           </div>
 
-          {/* Bottom Custom Actions Toolbar Row */}
+          {/* Bottom Toolbar with Slider Toggle */}
           <div className="flex items-center justify-between mt-3 bg-slate-950 p-1.5 border border-slate-800 rounded-lg">
-            <div className="flex items-center gap-1 flex-wrap">
-              <button 
-                title="Toggle Segmentation Mode"
-                onClick={() => setIsSegmentingRight(!isSegmentingRight)} 
-                className={`p-2 rounded transition relative ${isSegmentingRight ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-              >
-                {isSegmentingRight ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
+            <div className="flex items-center gap-2 flex-wrap w-full justify-between sm:justify-start">
+              <div className="flex items-center gap-1">
+                <button onClick={() => setIsSegmentingRight(!isSegmentingRight)} className={`p-2 rounded ${isSegmentingRight ? 'bg-red-600' : 'bg-indigo-600'} text-white`}>{isSegmentingRight ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}</button>
+                <button onClick={() => setZoomRight(1)} className="p-2 bg-indigo-600 text-white rounded"><Maximize2 className="h-4 w-4" /></button>
+                <button onClick={() => setCurrentPointsRight(p => p.slice(0, -1))} className="p-2 bg-indigo-600 text-white rounded"><Undo2 className="h-4 w-4" /></button>
+                <button onClick={() => { setPolygonsRight([]); setCurrentPointsRight([]); }} className="p-2 bg-indigo-600 text-white rounded"><RotateCw className="h-4 w-4" /></button>
+                <button onClick={() => handleDeletePolygon(undefined, 'right')} className="p-2 bg-rose-600 hover:bg-rose-700 text-white rounded" title="Delete Last Polygon"><Trash2 className="h-4 w-4" /></button>
+              </div>
+
+              {/* Line Toggle Zoom Slider */}
+              <div className="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-md border border-slate-800">
+                <ZoomOut className="h-3.5 w-3.5 text-slate-400" />
+                <input type="range" min="1" max="4" step="0.1" value={zoomRight} onChange={(e) => setZoomRight(parseFloat(e.target.value))} className="w-24 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                <ZoomIn className="h-3.5 w-3.5 text-slate-400" />
+                <span className="text-[10px] font-mono text-slate-400 w-8">{Math.round(zoomRight * 100)}%</span>
+              </div>
+
+              <button onClick={() => setClickToZoomRight(prev => !prev)} className={`px-2.5 py-1 rounded text-[10px] font-semibold ${clickToZoomRight ? 'bg-emerald-600' : 'bg-slate-700'} text-white`}>
+                Click Zoom {clickToZoomRight ? 'On' : 'Off'}
               </button>
-              
-              <button onClick={() => setZoomRight(z => Math.min(z + 0.25, 4))} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><ZoomIn className="h-4 w-4" /></button>
-              <button onClick={() => setZoomRight(z => Math.max(z - 0.25, 1))} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><ZoomOut className="h-4 w-4" /></button>
-              <button onClick={() => setZoomRight(1)} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><Maximize2 className="h-4 w-4" /></button>
-              <button className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><Move className="h-4 w-4" /></button>
-              <button onClick={() => setCurrentPointsRight(p => p.slice(0, -1))} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><Undo2 className="h-4 w-4" /></button>
-              <button onClick={() => { setPolygonsRight([]); setCurrentPointsRight([]); }} className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition"><RotateCw className="h-4 w-4" /></button>
 
               {currentPointsRight.length >= 3 && (
-                <button 
-                  onClick={() => saveCurrentShape('right')}
-                  className="ml-2 px-2.5 py-1.5 bg-green-600 text-white rounded text-xs font-bold flex items-center gap-1 hover:bg-green-700 transition"
-                >
-                  <Check className="h-3.5 w-3.5" /> Commit
-                </button>
+                <button onClick={() => saveCurrentShape('right')} className="px-2.5 py-1.5 bg-green-600 text-white rounded text-xs font-bold flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Save</button>
               )}
             </div>
-            <span className="text-[11px] font-semibold text-slate-400 mr-2 uppercase tracking-wider">Series Review: Sagittal</span>
           </div>
         </div>
 
