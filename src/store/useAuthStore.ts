@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import Cookies from 'js-cookie';
+import axios from 'axios';
+import api from '@/libs/Api';
 
 interface User {
   id: number;
@@ -16,6 +18,8 @@ interface AuthState {
   register: (credentials: Record<string, string>) => Promise<boolean>;
   logout: () => void;
 }
+
+
 
 const getInitialAuthState = () => {
   if (typeof window === 'undefined') {
@@ -40,23 +44,19 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (credentials) => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch('http://localhost:8000/api/auth/login/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
-      });
+      const res = await api.post('/api/auth/login/', credentials);
+      const data = res.data;
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Invalid username or password.');
-
-      Cookies.set('token', data.access, { expires: 1 });
-      Cookies.set('user', JSON.stringify(data.user), { expires: 1 });
-
-      set({ token: data.access, user: data.user, loading: false });
+      Cookies.set('token', data.access, { expires: 1, secure: process.env.NODE_ENV === 'production' });
+      Cookies.set('user', JSON.stringify(data.user), { expires: 1, secure: process.env.NODE_ENV === 'production' });
+      set({ token: data.access, user: data.user, loading: false, error: null });
       return true;
-    } catch (err: unknown) {
-      let errorMessage = 'An unexpected error occurred.';
-      if (err instanceof Error) {
+    } catch (err) {
+      let errorMessage = 'An unexpected error occurred during login.';
+      if (axios.isAxiosError(err) && err.response?.data) {
+        // Extracts detailed error message from the API response
+        errorMessage = Object.values(err.response.data).flat().join(' ');
+      } else if (err instanceof Error) {
         errorMessage = err.message;
       }
       set({ error: errorMessage, loading: false });
@@ -67,24 +67,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   register: async (credentials) => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch('http://localhost:8000/api/auth/register/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        const errorMsg = Object.values(data).flat().join(' ') || 'Registration failed.';
-        throw new Error(errorMsg);
-      }
-
-      set({ loading: false });
+      await api.post('/api/auth/register/', credentials);
+      set({ loading: false, error: null });
       return true;
-    } catch (err: unknown) {
+    } catch (err) {
       let errorMessage = 'An unexpected error occurred during registration.';
-      if (err instanceof Error) {
-        errorMessage = err.message;
+      if (axios.isAxiosError(err) && err.response?.data) {
+        errorMessage = Object.values(err.response.data).flat().join(' ') || 'Registration failed.';
       }
       set({ error: errorMessage, loading: false });
       return false;

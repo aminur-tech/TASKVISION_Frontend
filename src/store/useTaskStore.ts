@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import Cookies from 'js-cookie';
+import axios from 'axios';
+import api from '@/libs/Api';
 
 export interface Task {
   id: number;
@@ -15,7 +17,9 @@ interface TaskState {
   tasks: Task[];
   selectedDate: string;
   loading: boolean;
+  error: string | null;
   setSelectedDate: (date: string) => void;
+  setError: (error: string | null) => void;
   fetchTasks: () => Promise<void>;
   addTask: (task: Omit<Task, 'id'>) => Promise<void>;
   updateTask: (id: number, updates: Partial<Task>) => Promise<void>;
@@ -25,79 +29,77 @@ interface TaskState {
 export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
   selectedDate: new Date().toISOString().split('T')[0], // Defaults to Today (YYYY-MM-DD)
-  loading: false,
+  loading: true, // Start with loading true for initial fetch
+  error: null,
 
   setSelectedDate: (date) => {
     set({ selectedDate: date });
     get().fetchTasks();
   },
 
+  setError: (error) => set({ error }),
+
   fetchTasks: async () => {
-    set({ loading: true });
-    const token = Cookies.get('token');
+    set({ loading: true, error: null });
     try {
-      const res = await fetch(`http://localhost:8000/api/tasks/?date=${get().selectedDate}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        set({ tasks: data, loading: false });
-      } else {
-        set({ loading: false });
-      }
+      const res = await api.get(`/api/tasks/?date=${get().selectedDate}`);
+      set({ tasks: res.data, loading: false });
     } catch (err) {
-      set({ loading: false });
+      let errorMessage = 'Failed to fetch tasks.';
+      if (axios.isAxiosError(err) && err.response?.data) {
+        errorMessage = Object.values(err.response.data).flat().join(' ');
+      }
+      set({ loading: false, error: errorMessage, tasks: [] });
     }
   },
 
   addTask: async (taskData) => {
-    const token = Cookies.get('token');
-    const res = await fetch(`http://localhost:8000/api/tasks/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(taskData),
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      // This allows the custom Error/Success message modal on your page to catch it!
-      throw new Error(errorData.detail || 'Failed to create task on the server.');
+    try {
+      await api.post('/api/tasks/', taskData);
+      // Refetch tasks to show the new one
+      await get().fetchTasks();
+    } catch (err) {
+      let errorMessage = 'Failed to create task.';
+      if (axios.isAxiosError(err) && err.response?.data) {
+        errorMessage = Object.values(err.response.data).flat().join(' ');
+      }
+      // Re-throw the error to be caught by the UI component for notifications
+      throw new Error(errorMessage);
     }
-
-    // CRITICAL FIX: Await the fetch so that state updates BEFORE the modal action wraps up
-    await get().fetchTasks();
   },
 
   updateTask: async (id, updates) => {
-    const token = Cookies.get('token');
     const originalTasks = get().tasks;
-    
-    // Optimistic update
-    set({ tasks: originalTasks.map(t => t.id === id ? { ...t, ...updates } : t) });
 
-    const res = await fetch(`http://localhost:8000/api/tasks/${id}/`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(updates),
-    });
-    
-    if (!res.ok) set({ tasks: originalTasks }); // Rollback if server fails
+    // Optimistic update
+    const updatedTasks = originalTasks.map(t => t.id === id ? { ...t, ...updates } : t);
+    set({ tasks: updatedTasks });
+
+    try {
+      await api.patch(`/api/tasks/${id}/`, updates);
+    } catch (err) {
+      let errorMessage = 'Failed to update task.';
+      if (axios.isAxiosError(err) && err.response?.data) {
+        errorMessage = Object.values(err.response.data).flat().join(' ');
+      }
+      // Rollback on error and set an error message in the store
+      set({ tasks: originalTasks, error: errorMessage });
+    }
   },
 
   deleteTask: async (id) => {
-    const token = Cookies.get('token');
-    const res = await fetch(`http://localhost:8000/api/tasks/${id}/`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    
-    if (res.ok) {
+    const originalTasks = get().tasks;
+    // Optimistic update: remove the task from the list immediately
+    set({ tasks: originalTasks.filter(t => t.id !== id) });
+
+    try {
+      await api.delete(`/api/tasks/${id}/`);
+      // If you prefer to refetch after delete instead of optimistic update, you can do:
+      // await get().fetchTasks();
+    } catch (err) {
+      // Rollback on error
+      set({ tasks: originalTasks, error: 'Failed to delete task.' });
+      // Optionally refetch to ensure data consistency
       await get().fetchTasks();
     }
   }

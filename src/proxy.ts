@@ -8,7 +8,7 @@ export function proxy(request: NextRequest) {
   if (pathname.startsWith('/api')) {
     
     // Upstream Django server URL
-    const BACKEND_URL = 'http://localhost:8000'; // Using IP avoids local DNS resolution delays
+    const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     
     // Construct the destination URL while preserving subpaths and search query parameters
     const targetUrl = `${BACKEND_URL}${pathname}${search}`;

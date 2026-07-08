@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import Cookies from 'js-cookie';
 import { 
   ChevronLeft, ChevronRight, Scissors, ZoomIn, ZoomOut, 
-  Maximize2, Undo2, RotateCw, X, Check, Upload, Trash2
+  Maximize2, Undo2, RotateCw, X, Check, Upload, Trash2, Loader2
 } from 'lucide-react';
+import api from '@/libs/Api';
 
 interface Point {
   x: number;
@@ -61,6 +63,11 @@ export default function AdvancedAnnotationWorkspace() {
   const [currentPointsRight, setCurrentPointsRight] = useState<Point[]>([]);
   const svgRightRef = useRef<SVGSVGElement | null>(null);
   
+  // Drag and drop state
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  // Loading status state
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
   const selectionRef = useRef({ leftIndex, rightIndex });
 
   const mapPolygonsFromImage = useCallback((image?: DBImage): Polygon[] => {
@@ -73,7 +80,8 @@ export default function AdvancedAnnotationWorkspace() {
     }));
   }, []);
 
-  const fetchWorkspaceData = useCallback(async () => {
+  const fetchWorkspaceData = useCallback(async (showLoader = false) => {
+    if (showLoader) setIsLoading(true);
     try {
       const token = Cookies.get('token');
       if (!token) {
@@ -87,24 +95,30 @@ export default function AdvancedAnnotationWorkspace() {
         return;
       }
 
-      const res = await fetch('http://localhost:8000/api/annotations/images/', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data: DBImage[] = await res.json();
-        const { leftIndex: currentLeftIndex, rightIndex: currentRightIndex } = selectionRef.current;
-        
-        const nextLeftIndex = data.length > 0 ? Math.min(currentLeftIndex, data.length - 1) : 0;
-        const nextRightIndex = data.length > 0 ? Math.min(currentRightIndex, data.length - 1) : 0;
+      const res = await api.get<DBImage[]>('/api/annotations/images/');
+      const data = res.data;
+      console.log('Fetched images:', data);
+      
+      const { leftIndex: currentLeftIndex, rightIndex: currentRightIndex } = selectionRef.current;
+      
+      const nextLeftIndex = data.length > 0 ? Math.min(currentLeftIndex, data.length - 1) : 0;
+      const nextRightIndex = data.length > 0 ? Math.min(currentRightIndex, data.length - 1) : 0;
 
-        setImages(data);
-        setLeftIndex(nextLeftIndex);
-        setRightIndex(nextRightIndex);
-        setPolygonsLeft(mapPolygonsFromImage(data[nextLeftIndex]));
-        setPolygonsRight(mapPolygonsFromImage(data[nextRightIndex]));
-      }
+      setImages(data);
+      setLeftIndex(nextLeftIndex);
+      setRightIndex(nextRightIndex);
+      setPolygonsLeft(mapPolygonsFromImage(data[nextLeftIndex]));
+      setPolygonsRight(mapPolygonsFromImage(data[nextRightIndex]));
     } catch (err) {
-      console.error("Data syncing link offline.", err);
+      let errorMessage = "Data syncing link offline.";
+      if (axios.isAxiosError(err) && err.response?.data) {
+        errorMessage = Object.values(err.response.data).flat().join(' ');
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
+      }
+      console.error(errorMessage, err);
+    } finally {
+      setIsLoading(false);
     }
   }, [mapPolygonsFromImage]);
 
@@ -114,7 +128,7 @@ export default function AdvancedAnnotationWorkspace() {
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      void fetchWorkspaceData();
+      void fetchWorkspaceData(true); // Initial fetch shows primary loading screen
     }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [fetchWorkspaceData]);
@@ -133,24 +147,53 @@ export default function AdvancedAnnotationWorkspace() {
     setPolygonsRight(mapPolygonsFromImage(images[nextIndex]));
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
+  const uploadFilesPipeline = async (files: FileList) => {
     const token = Cookies.get('token');
     if (!token) return;
-
-    for (let i = 0; i < e.target.files.length; i++) {
+    
+    setIsLoading(true);
+    for (let i = 0; i < files.length; i++) {
+      if (!files[i].type.startsWith('image/')) continue;
+      
       const formData = new FormData();
-      formData.append('image', e.target.files[i]);
+      formData.append('image', files[i]);
       try {
-        const res = await fetch('http://localhost:8000/api/annotations/images/', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData
-        });
-        if (res.ok) await fetchWorkspaceData();
+        await api.post('/api/annotations/images/', formData);
       } catch (err) {
-        console.error(err);
+        let errorMessage = "Error uploading image.";
+        if (axios.isAxiosError(err) && err.response?.data) {
+          errorMessage = Object.values(err.response.data).flat().join(' ');
+        }
+        console.error(errorMessage, err);
       }
+    }
+    await fetchWorkspaceData(false);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    await uploadFilesPipeline(e.target.files);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await uploadFilesPipeline(e.dataTransfer.files);
     }
   };
 
@@ -162,14 +205,17 @@ export default function AdvancedAnnotationWorkspace() {
     const token = Cookies.get('token');
     if (!token) return;
 
+    setIsLoading(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/annotations/images/${targetImage.id}/`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) await fetchWorkspaceData();
+      await api.delete(`/api/annotations/images/${targetImage.id}/`);
+      await fetchWorkspaceData(false);
     } catch (err) {
-      console.error(err);
+      let errorMessage = "Error deleting image.";
+      if (axios.isAxiosError(err) && err.response?.data) {
+        errorMessage = Object.values(err.response.data).flat().join(' ');
+      }
+      console.error(errorMessage, err);
+      setIsLoading(false);
     }
   };
 
@@ -190,14 +236,17 @@ export default function AdvancedAnnotationWorkspace() {
     const token = Cookies.get('token');
     if (!token) return;
 
+    setIsLoading(true);
     try {
-      await fetch(`http://localhost:8000/api/annotations/polygons/${resolvedPolyId}/`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      await fetchWorkspaceData();
+      await api.delete(`/api/annotations/polygons/${resolvedPolyId}/`);
+      await fetchWorkspaceData(false);
     } catch (err) {
-      console.error("Error deleting polygon:", err);
+      let errorMessage = "Error deleting polygon.";
+      if (axios.isAxiosError(err) && err.response?.data) {
+        errorMessage = Object.values(err.response.data).flat().join(' ');
+      }
+      console.error(errorMessage, err);
+      setIsLoading(false);
     }
   };
 
@@ -207,7 +256,7 @@ export default function AdvancedAnnotationWorkspace() {
     setPoints: React.Dispatch<React.SetStateAction<Point[]>>,
     segmentingMode: boolean
   ) => {
-    if (!ref.current || !segmentingMode) return;
+    if (!ref.current || !segmentingMode || isLoading) return;
     const rect = ref.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -244,50 +293,70 @@ export default function AdvancedAnnotationWorkspace() {
 
     if (!token) return;
 
+    setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/annotations/polygons/', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ image: currentImg.id, points, label })
-      });
-      if (res.ok) await fetchWorkspaceData();
+      await api.post('/api/annotations/polygons/', { image: currentImg.id, points, label });
+      await fetchWorkspaceData(false);
     } catch (err) {
-      console.error(err);
+      let errorMessage = "Error saving polygon.";
+      if (axios.isAxiosError(err) && err.response?.data) {
+        errorMessage = Object.values(err.response.data).flat().join(' ');
+      }
+      console.error(errorMessage, err);
+      setIsLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 p-16 font-sans text-slate-100">
-      <div className="mx-auto max-w-[1200px] mb-4 flex flex-wrap items-center justify-between gap-4 bg-slate-900/90 border border-white/10 rounded-xl px-4 py-3">
+    <main 
+      className="min-h-screen bg-slate-950 p-16 font-sans text-slate-100 relative"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div 
+        className={`mx-auto max-w-[1200px] mb-4 flex flex-wrap items-center justify-between gap-4 bg-slate-900/90 border transition-colors rounded-xl px-4 py-3 ${
+          isDragging ? 'border-indigo-500 bg-slate-900/100' : 'border-white/10'
+        }`}
+      >
         <div>
           <h1 className="text-sm font-bold tracking-tight text-white">Advanced Segment Analytics Matrix</h1>
-          <p className="text-[11px] text-slate-400">Synchronized structural medical visualization engine</p>
+          <p className="text-[11px] text-slate-400">
+            {isDragging ? "Drop images anywhere to auto-upload..." : "Synchronized structural medical visualization engine"}
+          </p>
         </div>
         <label className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white transition px-3 py-1.5 rounded cursor-pointer text-xs font-semibold shadow-sm">
-          <Upload className="h-3.5 w-3.5" /> Upload Image Batch
-          <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} />
+          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Upload Image Batch
+          <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isLoading} />
         </label>
       </div>
 
-      <div className="mx-auto max-w-[1200px] grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className={`mx-auto max-w-[1200px] grid grid-cols-1 xl:grid-cols-2 gap-4 transition-all duration-200 rounded-xl relative ${
+        isDragging ? 'outline-2 outline-dashed outline-indigo-500/60 outline-offset-4' : ''
+      }`}>
         
+        {/* Global Pipeline Sync Loader Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] z-50 rounded-xl flex flex-col items-center justify-center gap-2 border border-slate-800">
+            <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
+            <span className="text-xs font-medium tracking-wide text-slate-300">Syncing Matrix Core Layer...</span>
+          </div>
+        )}
+
         {/* ================= LEFT VIEWPORT (AXIAL) ================= */}
         <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col">
           <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-950 p-2 border border-slate-800 rounded-lg mb-3 text-xs">
             <div className="flex items-center gap-1.5">
-              <button onClick={() => selectLeftImage(leftIndex - 1)} className="p-1 rounded bg-indigo-600 text-white"><ChevronLeft className="h-4 w-4" /></button>
+              <button disabled={isLoading} onClick={() => selectLeftImage(leftIndex - 1)} className="p-1 rounded bg-indigo-600 text-white disabled:opacity-50"><ChevronLeft className="h-4 w-4" /></button>
               <span className="font-bold text-slate-200 min-w-[90px] text-center">Axial ({images.length > 0 ? leftIndex + 1 : 0}/{images.length})</span>
-              <button onClick={() => selectLeftImage(leftIndex + 1)} className="p-1 rounded bg-indigo-600 text-white"><ChevronRight className="h-4 w-4" /></button>
+              <button disabled={isLoading} onClick={() => selectLeftImage(leftIndex + 1)} className="p-1 rounded bg-indigo-600 text-white disabled:opacity-50"><ChevronRight className="h-4 w-4" /></button>
               {images[leftIndex] && (
-                <button onClick={() => handleDeleteImage('left')} className="p-1 ml-1 rounded bg-red-950 border border-red-800 text-red-400"><Trash2 className="h-3.5 w-3.5" /></button>
+                <button disabled={isLoading} onClick={() => handleDeleteImage('left')} className="p-1 ml-1 rounded bg-red-950 border border-red-800 text-red-400 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
               )}
             </div>
 
             <div className="flex items-center gap-3">
-              <select value={selectedClassLeft} onChange={(e) => setSelectedClassLeft(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs">
+              <select disabled={isLoading} value={selectedClassLeft} onChange={(e) => setSelectedClassLeft(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs">
                 <option value="Tumor">Tumor</option>
                 <option value="Node">Lymph Node</option>
               </select>
@@ -320,18 +389,15 @@ export default function AdvancedAnnotationWorkspace() {
             </div>
           </div>
 
-          {/* Bottom Toolbar with Slider Toggle */}
           <div className="flex items-center justify-between mt-3 bg-slate-950 p-1.5 border border-slate-800 rounded-lg">
             <div className="flex items-center gap-2 flex-wrap w-full justify-between sm:justify-start">
               <div className="flex items-center gap-1">
-                <button onClick={() => setIsSegmentingLeft(!isSegmentingLeft)} className={`p-2 rounded ${isSegmentingLeft ? 'bg-red-600' : 'bg-indigo-600'} text-white`}>{isSegmentingLeft ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}</button>
+                <button disabled={isLoading} onClick={() => setIsSegmentingLeft(!isSegmentingLeft)} className={`p-2 rounded ${isSegmentingLeft ? 'bg-red-600' : 'bg-indigo-600'} text-white`}>{isSegmentingLeft ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}</button>
                 <button onClick={() => setZoomLeft(1)} className="p-2 bg-indigo-600 text-white rounded"><Maximize2 className="h-4 w-4" /></button>
                 <button onClick={() => setCurrentPointsLeft(p => p.slice(0, -1))} className="p-2 bg-indigo-600 text-white rounded"><Undo2 className="h-4 w-4" /></button>
-                
-                <button onClick={() => handleDeletePolygon(undefined, 'left')} className="p-2 bg-rose-600 hover:bg-rose-700 text-white rounded" title="Delete Last Polygon"><Trash2 className="h-4 w-4" /></button>
+                <button disabled={isLoading} onClick={() => handleDeletePolygon(undefined, 'left')} className="p-2 bg-rose-600 hover:bg-rose-700 text-white rounded" title="Delete Last Polygon"><Trash2 className="h-4 w-4" /></button>
               </div>
 
-              {/* Line Toggle Zoom Slider */}
               <div className="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-md border border-slate-800">
                 <ZoomOut className="h-3.5 w-3.5 text-slate-400" />
                 <input type="range" min="1" max="4" step="0.1" value={zoomLeft} onChange={(e) => setZoomLeft(parseFloat(e.target.value))} className="w-24 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
@@ -344,7 +410,7 @@ export default function AdvancedAnnotationWorkspace() {
               </button>
 
               {currentPointsLeft.length >= 3 && (
-                <button onClick={() => saveCurrentShape('left')} className="px-2.5 py-1.5 bg-green-600 text-white rounded text-xs font-bold flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Save</button>
+                <button disabled={isLoading} onClick={() => saveCurrentShape('left')} className="px-2.5 py-1.5 bg-green-600 text-white rounded text-xs font-bold flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Save</button>
               )}
             </div>
           </div>
@@ -354,16 +420,16 @@ export default function AdvancedAnnotationWorkspace() {
         <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col">
           <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-950 p-2 border border-slate-800 rounded-lg mb-3 text-xs">
             <div className="flex items-center gap-1.5">
-              <button onClick={() => selectRightImage(rightIndex - 1)} className="p-1 rounded bg-indigo-600 text-white"><ChevronLeft className="h-4 w-4" /></button>
+              <button disabled={isLoading} onClick={() => selectRightImage(rightIndex - 1)} className="p-1 rounded bg-indigo-600 text-white disabled:opacity-50"><ChevronLeft className="h-4 w-4" /></button>
               <span className="font-bold text-slate-200 min-w-[90px] text-center">Sagittal ({images.length > 0 ? rightIndex + 1 : 0}/{images.length})</span>
-              <button onClick={() => selectRightImage(rightIndex + 1)} className="p-1 rounded bg-indigo-600 text-white"><ChevronRight className="h-4 w-4" /></button>
+              <button disabled={isLoading} onClick={() => selectRightImage(rightIndex + 1)} className="p-1 rounded bg-indigo-600 text-white disabled:opacity-50"><ChevronRight className="h-4 w-4" /></button>
               {images[rightIndex] && (
-                <button onClick={() => handleDeleteImage('right')} className="p-1 ml-1 rounded bg-red-950 border border-red-800 text-red-400"><Trash2 className="h-3.5 w-3.5" /></button>
+                <button disabled={isLoading} onClick={() => handleDeleteImage('right')} className="p-1 ml-1 rounded bg-red-950 border border-red-800 text-red-400 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
               )}
             </div>
 
             <div className="flex items-center gap-3">
-              <select value={selectedClassRight} onChange={(e) => setSelectedClassRight(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs">
+              <select disabled={isLoading} value={selectedClassRight} onChange={(e) => setSelectedClassRight(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs">
                 <option value="Tumor">Tumor</option>
                 <option value="Node">Lymph Node</option>
               </select>
@@ -396,18 +462,16 @@ export default function AdvancedAnnotationWorkspace() {
             </div>
           </div>
 
-          {/* Bottom Toolbar with Slider Toggle */}
           <div className="flex items-center justify-between mt-3 bg-slate-950 p-1.5 border border-slate-800 rounded-lg">
             <div className="flex items-center gap-2 flex-wrap w-full justify-between sm:justify-start">
               <div className="flex items-center gap-1">
-                <button onClick={() => setIsSegmentingRight(!isSegmentingRight)} className={`p-2 rounded ${isSegmentingRight ? 'bg-red-600' : 'bg-indigo-600'} text-white`}>{isSegmentingRight ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}</button>
+                <button disabled={isLoading} onClick={() => setIsSegmentingRight(!isSegmentingRight)} className={`p-2 rounded ${isSegmentingRight ? 'bg-red-600' : 'bg-indigo-600'} text-white`}>{isSegmentingRight ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}</button>
                 <button onClick={() => setZoomRight(1)} className="p-2 bg-indigo-600 text-white rounded"><Maximize2 className="h-4 w-4" /></button>
                 <button onClick={() => setCurrentPointsRight(p => p.slice(0, -1))} className="p-2 bg-indigo-600 text-white rounded"><Undo2 className="h-4 w-4" /></button>
                 <button onClick={() => { setPolygonsRight([]); setCurrentPointsRight([]); }} className="p-2 bg-indigo-600 text-white rounded"><RotateCw className="h-4 w-4" /></button>
-                <button onClick={() => handleDeletePolygon(undefined, 'right')} className="p-2 bg-rose-600 hover:bg-rose-700 text-white rounded" title="Delete Last Polygon"><Trash2 className="h-4 w-4" /></button>
+                <button disabled={isLoading} onClick={() => handleDeletePolygon(undefined, 'right')} className="p-2 bg-rose-600 hover:bg-rose-700 text-white rounded" title="Delete Last Polygon"><Trash2 className="h-4 w-4" /></button>
               </div>
 
-              {/* Line Toggle Zoom Slider */}
               <div className="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-md border border-slate-800">
                 <ZoomOut className="h-3.5 w-3.5 text-slate-400" />
                 <input type="range" min="1" max="4" step="0.1" value={zoomRight} onChange={(e) => setZoomRight(parseFloat(e.target.value))} className="w-24 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
@@ -420,7 +484,7 @@ export default function AdvancedAnnotationWorkspace() {
               </button>
 
               {currentPointsRight.length >= 3 && (
-                <button onClick={() => saveCurrentShape('right')} className="px-2.5 py-1.5 bg-green-600 text-white rounded text-xs font-bold flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Save</button>
+                <button disabled={isLoading} onClick={() => saveCurrentShape('right')} className="px-2.5 py-1.5 bg-green-600 text-white rounded text-xs font-bold flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Save</button>
               )}
             </div>
           </div>
