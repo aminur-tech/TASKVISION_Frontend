@@ -63,9 +63,7 @@ export default function AdvancedAnnotationWorkspace() {
   const [currentPointsRight, setCurrentPointsRight] = useState<Point[]>([]);
   const svgRightRef = useRef<SVGSVGElement | null>(null);
   
-  // Drag and drop state
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  // Loading status state
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const selectionRef = useRef({ leftIndex, rightIndex });
@@ -97,7 +95,6 @@ export default function AdvancedAnnotationWorkspace() {
 
       const res = await api.get<DBImage[]>('/api/annotations/images/');
       const data = res.data;
-      console.log('Fetched images:', data);
       
       const { leftIndex: currentLeftIndex, rightIndex: currentRightIndex } = selectionRef.current;
       
@@ -128,7 +125,7 @@ export default function AdvancedAnnotationWorkspace() {
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      void fetchWorkspaceData(true); // Initial fetch shows primary loading screen
+      void fetchWorkspaceData(true);
     }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [fetchWorkspaceData]);
@@ -250,16 +247,17 @@ export default function AdvancedAnnotationWorkspace() {
     }
   };
 
-  const handleCanvasClick = (
-    e: React.MouseEvent<SVGSVGElement>, 
+  const handleCanvasTouchOrClick = (
+    clientX: number,
+    clientY: number,
     ref: React.RefObject<SVGSVGElement | null>, 
     setPoints: React.Dispatch<React.SetStateAction<Point[]>>,
     segmentingMode: boolean
   ) => {
     if (!ref.current || !segmentingMode || isLoading) return;
     const rect = ref.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
     setPoints(prev => [...prev, { x, y }]);
   };
 
@@ -309,33 +307,36 @@ export default function AdvancedAnnotationWorkspace() {
 
   return (
     <main 
-      className="min-h-screen bg-slate-950 p-16 font-sans text-slate-100 relative"
+      className="min-h-screen bg-slate-950 p-3 sm:p-6 md:p-12 lg:p-16 font-sans text-slate-100 relative selection:bg-indigo-500/30"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* Top Bar Header */}
       <div 
-        className={`mx-auto max-w-[1200px] mb-4 flex flex-wrap items-center justify-between gap-4 bg-slate-900/90 border transition-colors rounded-xl px-4 py-3 ${
+        className={`mx-auto max-w-[1200px] mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/90 border transition-colors rounded-xl p-4 ${
           isDragging ? 'border-indigo-500 bg-slate-900/100' : 'border-white/10'
         }`}
       >
         <div>
           <h1 className="text-sm font-bold tracking-tight text-white">Advanced Segment Analytics Matrix</h1>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-400 mt-0.5">
             {isDragging ? "Drop images anywhere to auto-upload..." : "Synchronized structural medical visualization engine"}
           </p>
         </div>
-        <label className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white transition px-3 py-1.5 rounded cursor-pointer text-xs font-semibold shadow-sm">
-          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Upload Image Batch
+        <label className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white transition px-4 py-2 sm:py-1.5 rounded-lg cursor-pointer text-xs font-semibold shadow-sm select-none">
+          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} 
+          <span>Upload Image Batch</span>
           <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isLoading} />
         </label>
       </div>
 
-      <div className={`mx-auto max-w-[1200px] grid grid-cols-1 xl:grid-cols-2 gap-4 transition-all duration-200 rounded-xl relative ${
+      {/* Main Viewport Workspace Grid */}
+      <div className={`mx-auto max-w-[1200px] grid grid-cols-1 lg:grid-cols-2 gap-4 transition-all duration-200 rounded-xl relative ${
         isDragging ? 'outline-2 outline-dashed outline-indigo-500/60 outline-offset-4' : ''
       }`}>
         
-        {/* Global Pipeline Sync Loader Overlay */}
+        {/* Global Loader Overlay */}
         {isLoading && (
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] z-50 rounded-xl flex flex-col items-center justify-center gap-2 border border-slate-800">
             <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
@@ -344,28 +345,34 @@ export default function AdvancedAnnotationWorkspace() {
         )}
 
         {/* ================= LEFT VIEWPORT (AXIAL) ================= */}
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col">
-          <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-950 p-2 border border-slate-800 rounded-lg mb-3 text-xs">
-            <div className="flex items-center gap-1.5">
-              <button disabled={isLoading} onClick={() => selectLeftImage(leftIndex - 1)} className="p-1 rounded bg-indigo-600 text-white disabled:opacity-50"><ChevronLeft className="h-4 w-4" /></button>
-              <span className="font-bold text-slate-200 min-w-[90px] text-center">Axial ({images.length > 0 ? leftIndex + 1 : 0}/{images.length})</span>
-              <button disabled={isLoading} onClick={() => selectLeftImage(leftIndex + 1)} className="p-1 rounded bg-indigo-600 text-white disabled:opacity-50"><ChevronRight className="h-4 w-4" /></button>
+        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col overflow-hidden">
+          {/* Controls Bar Header */}
+          <div className="flex flex-col gap-3 bg-slate-900/50 p-2.5 border border-slate-800/80 rounded-lg mb-3 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1">
+                <button disabled={isLoading} onClick={() => selectLeftImage(leftIndex - 1)} className="p-2 sm:p-1.5 rounded bg-indigo-600 active:bg-indigo-700 text-white disabled:opacity-50 touch-manipulation"><ChevronLeft className="h-4 w-4" /></button>
+                <span className="font-bold text-slate-200 min-w-[90px] text-center text-xs">Axial ({images.length > 0 ? leftIndex + 1 : 0}/{images.length})</span>
+                <button disabled={isLoading} onClick={() => selectLeftImage(leftIndex + 1)} className="p-2 sm:p-1.5 rounded bg-indigo-600 active:bg-indigo-700 text-white disabled:opacity-50 touch-manipulation"><ChevronRight className="h-4 w-4" /></button>
+              </div>
               {images[leftIndex] && (
-                <button disabled={isLoading} onClick={() => handleDeleteImage('left')} className="p-1 ml-1 rounded bg-red-950 border border-red-800 text-red-400 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
+                <button disabled={isLoading} onClick={() => handleDeleteImage('left')} className="p-2 sm:p-1.5 rounded bg-red-950/60 border border-red-800/60 text-red-400 active:bg-red-900/40 disabled:opacity-50 touch-manipulation"><Trash2 className="h-3.5 w-3.5" /></button>
               )}
             </div>
 
-            <div className="flex items-center gap-3">
-              <select disabled={isLoading} value={selectedClassLeft} onChange={(e) => setSelectedClassLeft(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/60">
+              <select disabled={isLoading} value={selectedClassLeft} onChange={(e) => setSelectedClassLeft(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 outline-none focus:border-indigo-500 flex-1 sm:flex-initial min-w-[100px]">
                 <option value="Tumor">Tumor</option>
                 <option value="Node">Lymph Node</option>
               </select>
-              <label className="flex items-center gap-1"><input type="checkbox" checked={hideAnnotationsLeft} onChange={(e) => setHideAnnotationsLeft(e.target.checked)} className="rounded border-slate-700 text-indigo-600 w-3.5 h-3.5" /><span>Hide Annotations</span></label>
-              <label className="flex items-center gap-1"><input type="checkbox" checked={applyCTLeft} onChange={(e) => setApplyCTLeft(e.target.checked)} className="rounded border-slate-700 text-indigo-600 w-3.5 h-3.5" /><span>Apply CT Window</span></label>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer select-none py-1"><input type="checkbox" checked={hideAnnotationsLeft} onChange={(e) => setHideAnnotationsLeft(e.target.checked)} className="rounded border-slate-700 text-indigo-600 w-4 h-4 accent-indigo-600 focus:ring-0 focus:ring-offset-0" /><span className="text-[11px] sm:text-xs">Hide</span></label>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none py-1"><input type="checkbox" checked={applyCTLeft} onChange={(e) => setApplyCTLeft(e.target.checked)} className="rounded border-slate-700 text-indigo-600 w-4 h-4 accent-indigo-600 focus:ring-0 focus:ring-offset-0" /><span className="text-[11px] sm:text-xs">CT Window</span></label>
+              </div>
             </div>
           </div>
 
-          <div className="relative aspect-square w-full bg-black rounded-lg border border-slate-800 overflow-hidden flex items-center justify-center">
+          {/* Interactive Canvas Container */}
+          <div className="relative aspect-square w-full bg-black rounded-lg border border-slate-800 overflow-hidden flex items-center justify-center touch-none">
             <div
               className="relative w-full h-full transition-transform duration-200 ease-out origin-center"
               style={{ transform: `scale(${zoomLeft})` }}
@@ -379,7 +386,18 @@ export default function AdvancedAnnotationWorkspace() {
                 <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">No Image Loaded</div>
               )}
               
-              <svg ref={svgLeftRef} onClick={(e) => handleCanvasClick(e, svgLeftRef, setCurrentPointsLeft, isSegmentingLeft)} className={`absolute inset-0 w-full h-full z-10 ${isSegmentingLeft ? 'cursor-crosshair' : 'cursor-default'}`} viewBox="0 0 100 100" preserveAspectRatio="none">
+              <svg 
+                ref={svgLeftRef} 
+                onClick={(e) => handleCanvasTouchOrClick(e.clientX, e.clientY, svgLeftRef, setCurrentPointsLeft, isSegmentingLeft)}
+                onTouchStart={(e) => {
+                  if (isSegmentingLeft && e.touches.length === 1) {
+                    handleCanvasTouchOrClick(e.touches[0].clientX, e.touches[0].clientY, svgLeftRef, setCurrentPointsLeft, isSegmentingLeft);
+                  }
+                }}
+                className={`absolute inset-0 w-full h-full z-10 ${isSegmentingLeft ? 'cursor-crosshair' : 'cursor-default'}`} 
+                viewBox="0 0 100 100" 
+                preserveAspectRatio="none"
+              >
                 {!hideAnnotationsLeft && polygonsLeft.map((poly) => (
                   <polygon key={poly.id} points={poly.points.map(p => `${p.x},${p.y}`).join(' ')} className="fill-red-500/20 stroke-red-600 stroke-[0.4]" />
                 ))}
@@ -389,56 +407,68 @@ export default function AdvancedAnnotationWorkspace() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between mt-3 bg-slate-950 p-1.5 border border-slate-800 rounded-lg">
-            <div className="flex items-center gap-2 flex-wrap w-full justify-between sm:justify-start">
-              <div className="flex items-center gap-1">
-                <button disabled={isLoading} onClick={() => setIsSegmentingLeft(!isSegmentingLeft)} className={`p-2 rounded ${isSegmentingLeft ? 'bg-red-600' : 'bg-indigo-600'} text-white`}>{isSegmentingLeft ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}</button>
-                <button onClick={() => setZoomLeft(1)} className="p-2 bg-indigo-600 text-white rounded"><Maximize2 className="h-4 w-4" /></button>
-                <button onClick={() => setCurrentPointsLeft(p => p.slice(0, -1))} className="p-2 bg-indigo-600 text-white rounded"><Undo2 className="h-4 w-4" /></button>
-                <button disabled={isLoading} onClick={() => handleDeletePolygon(undefined, 'left')} className="p-2 bg-rose-600 hover:bg-rose-700 text-white rounded" title="Delete Last Polygon"><Trash2 className="h-4 w-4" /></button>
+          {/* Canvas Actions Toolbelt */}
+          <div className="flex flex-col gap-2 mt-3 bg-slate-900/30 p-2 border border-slate-800/80 rounded-lg">
+            
+            <div className="flex flex-wrap items-center gap-1.5 w-full justify-between">
+              <div className="flex flex-wrap items-center gap-1">
+                <button disabled={isLoading} onClick={() => setIsSegmentingLeft(!isSegmentingLeft)} className={`p-2.5 rounded-lg active:scale-95 transition-transform ${isSegmentingLeft ? 'bg-red-600' : 'bg-indigo-600'} text-white touch-manipulation`} title="Toggle Segment Draw">
+                  {isSegmentingLeft ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
+                </button>
+                <button onClick={() => setZoomLeft(1)} className="p-2.5 bg-indigo-600 active:bg-indigo-700 text-white rounded-lg active:scale-95 transition-transform touch-manipulation" title="Reset Zoom"><Maximize2 className="h-4 w-4" /></button>
+                <button onClick={() => setCurrentPointsLeft(p => p.slice(0, -1))} className="p-2.5 bg-indigo-600 active:bg-indigo-700 text-white rounded-lg active:scale-95 transition-transform touch-manipulation" title="Undo Last Node Point"><Undo2 className="h-4 w-4" /></button>
+                <button disabled={isLoading} onClick={() => handleDeletePolygon(undefined, 'left')} className="p-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg active:scale-95 transition-transform touch-manipulation" title="Delete Last Polygon"><Trash2 className="h-4 w-4" /></button>
               </div>
 
-              <div className="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-md border border-slate-800">
-                <ZoomOut className="h-3.5 w-3.5 text-slate-400" />
-                <input type="range" min="1" max="4" step="0.1" value={zoomLeft} onChange={(e) => setZoomLeft(parseFloat(e.target.value))} className="w-24 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
-                <ZoomIn className="h-3.5 w-3.5 text-slate-400" />
-                <span className="text-[10px] font-mono text-slate-400 w-8">{Math.round(zoomLeft * 100)}%</span>
-              </div>
-
-              <button onClick={() => setClickToZoomLeft(prev => !prev)} className={`px-2.5 py-1 rounded text-[10px] font-semibold ${clickToZoomLeft ? 'bg-emerald-600' : 'bg-slate-700'} text-white`}>
+              <button onClick={() => setClickToZoomLeft(prev => !prev)} className={`px-2.5 py-2 rounded-lg text-[10px] font-bold active:scale-95 transition-all select-none ${clickToZoomLeft ? 'bg-emerald-600/90 text-white' : 'bg-slate-800 text-slate-400'} touch-manipulation`}>
                 Click Zoom {clickToZoomLeft ? 'On' : 'Off'}
               </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-1 w-full">
+              <div className="flex items-center gap-2 bg-slate-900 px-2 py-1.5 rounded-lg border border-slate-800 flex-1 max-w-[220px]">
+                <ZoomOut className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                <input type="range" min="1" max="4" step="0.1" value={zoomLeft} onChange={(e) => setZoomLeft(parseFloat(e.target.value))} className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                <ZoomIn className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                <span className="text-[10px] font-mono text-slate-400 w-8 text-right shrink-0">{Math.round(zoomLeft * 100)}%</span>
+              </div>
 
               {currentPointsLeft.length >= 3 && (
-                <button disabled={isLoading} onClick={() => saveCurrentShape('left')} className="px-2.5 py-1.5 bg-green-600 text-white rounded text-xs font-bold flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Save</button>
+                <button disabled={isLoading} onClick={() => saveCurrentShape('left')} className="px-3 py-1.5 bg-green-600 active:bg-green-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 active:scale-95 transition-transform animate-pulse touch-manipulation"><Check className="h-3.5 w-3.5" /> Save</button>
               )}
             </div>
           </div>
         </div>
 
         {/* ================= RIGHT VIEWPORT (SAGITTAL) ================= */}
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col">
-          <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-950 p-2 border border-slate-800 rounded-lg mb-3 text-xs">
-            <div className="flex items-center gap-1.5">
-              <button disabled={isLoading} onClick={() => selectRightImage(rightIndex - 1)} className="p-1 rounded bg-indigo-600 text-white disabled:opacity-50"><ChevronLeft className="h-4 w-4" /></button>
-              <span className="font-bold text-slate-200 min-w-[90px] text-center">Sagittal ({images.length > 0 ? rightIndex + 1 : 0}/{images.length})</span>
-              <button disabled={isLoading} onClick={() => selectRightImage(rightIndex + 1)} className="p-1 rounded bg-indigo-600 text-white disabled:opacity-50"><ChevronRight className="h-4 w-4" /></button>
+        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col overflow-hidden">
+          {/* Controls Bar Header */}
+          <div className="flex flex-col gap-3 bg-slate-900/50 p-2.5 border border-slate-800/80 rounded-lg mb-3 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1">
+                <button disabled={isLoading} onClick={() => selectRightImage(rightIndex - 1)} className="p-2 sm:p-1.5 rounded bg-indigo-600 active:bg-indigo-700 text-white disabled:opacity-50 touch-manipulation"><ChevronLeft className="h-4 w-4" /></button>
+                <span className="font-bold text-slate-200 min-w-[90px] text-center text-xs">Sagittal ({images.length > 0 ? rightIndex + 1 : 0}/{images.length})</span>
+                <button disabled={isLoading} onClick={() => selectRightImage(rightIndex + 1)} className="p-2 sm:p-1.5 rounded bg-indigo-600 active:bg-indigo-700 text-white disabled:opacity-50 touch-manipulation"><ChevronRight className="h-4 w-4" /></button>
+              </div>
               {images[rightIndex] && (
-                <button disabled={isLoading} onClick={() => handleDeleteImage('right')} className="p-1 ml-1 rounded bg-red-950 border border-red-800 text-red-400 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
+                <button disabled={isLoading} onClick={() => handleDeleteImage('right')} className="p-2 sm:p-1.5 rounded bg-red-950/60 border border-red-800/60 text-red-400 active:bg-red-900/40 disabled:opacity-50 touch-manipulation"><Trash2 className="h-3.5 w-3.5" /></button>
               )}
             </div>
 
-            <div className="flex items-center gap-3">
-              <select disabled={isLoading} value={selectedClassRight} onChange={(e) => setSelectedClassRight(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/60">
+              <select disabled={isLoading} value={selectedClassRight} onChange={(e) => setSelectedClassRight(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 outline-none focus:border-indigo-500 flex-1 sm:flex-initial min-w-[100px]">
                 <option value="Tumor">Tumor</option>
                 <option value="Node">Lymph Node</option>
               </select>
-              <label className="flex items-center gap-1"><input type="checkbox" checked={hideAnnotationsRight} onChange={(e) => setHideAnnotationsRight(e.target.checked)} className="rounded border-slate-700 text-indigo-600 w-3.5 h-3.5" /><span>Hide Annotations</span></label>
-              <label className="flex items-center gap-1"><input type="checkbox" checked={applyCTRight} onChange={(e) => setApplyCTRight(e.target.checked)} className="rounded border-slate-700 text-indigo-600 w-3.5 h-3.5" /><span>Apply CT Window</span></label>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer select-none py-1"><input type="checkbox" checked={hideAnnotationsRight} onChange={(e) => setHideAnnotationsRight(e.target.checked)} className="rounded border-slate-700 text-indigo-600 w-4 h-4 accent-indigo-600 focus:ring-0 focus:ring-offset-0" /><span className="text-[11px] sm:text-xs">Hide</span></label>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none py-1"><input type="checkbox" checked={applyCTRight} onChange={(e) => setApplyCTRight(e.target.checked)} className="rounded border-slate-700 text-indigo-600 w-4 h-4 accent-indigo-600 focus:ring-0 focus:ring-offset-0" /><span className="text-[11px] sm:text-xs">CT Window</span></label>
+              </div>
             </div>
           </div>
 
-          <div className="relative aspect-square w-full bg-black rounded-lg border border-slate-800 overflow-hidden flex items-center justify-center">
+          {/* Interactive Canvas Container */}
+          <div className="relative aspect-square w-full bg-black rounded-lg border border-slate-800 overflow-hidden flex items-center justify-center touch-none">
             <div
               className="relative w-full h-full transition-transform duration-200 ease-out origin-center"
               style={{ transform: `scale(${zoomRight})` }}
@@ -452,7 +482,18 @@ export default function AdvancedAnnotationWorkspace() {
                 <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">No Image Loaded</div>
               )}
               
-              <svg ref={svgRightRef} onClick={(e) => handleCanvasClick(e, svgRightRef, setCurrentPointsRight, isSegmentingRight)} className={`absolute inset-0 w-full h-full z-10 ${isSegmentingRight ? 'cursor-crosshair' : 'cursor-default'}`} viewBox="0 0 100 100" preserveAspectRatio="none">
+              <svg 
+                ref={svgRightRef} 
+                onClick={(e) => handleCanvasTouchOrClick(e.clientX, e.clientY, svgRightRef, setCurrentPointsRight, isSegmentingRight)}
+                onTouchStart={(e) => {
+                  if (isSegmentingRight && e.touches.length === 1) {
+                    handleCanvasTouchOrClick(e.touches[0].clientX, e.touches[0].clientY, svgRightRef, setCurrentPointsRight, isSegmentingRight);
+                  }
+                }}
+                className={`absolute inset-0 w-full h-full z-10 ${isSegmentingRight ? 'cursor-crosshair' : 'cursor-default'}`} 
+                viewBox="0 0 100 100" 
+                preserveAspectRatio="none"
+              >
                 {!hideAnnotationsRight && polygonsRight.map((poly) => (
                   <polygon key={poly.id} points={poly.points.map(p => `${p.x},${p.y}`).join(' ')} className="fill-blue-500/20 stroke-blue-600 stroke-[0.4]" />
                 ))}
@@ -462,29 +503,34 @@ export default function AdvancedAnnotationWorkspace() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between mt-3 bg-slate-950 p-1.5 border border-slate-800 rounded-lg">
-            <div className="flex items-center gap-2 flex-wrap w-full justify-between sm:justify-start">
-              <div className="flex items-center gap-1">
-                <button disabled={isLoading} onClick={() => setIsSegmentingRight(!isSegmentingRight)} className={`p-2 rounded ${isSegmentingRight ? 'bg-red-600' : 'bg-indigo-600'} text-white`}>{isSegmentingRight ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}</button>
-                <button onClick={() => setZoomRight(1)} className="p-2 bg-indigo-600 text-white rounded"><Maximize2 className="h-4 w-4" /></button>
-                <button onClick={() => setCurrentPointsRight(p => p.slice(0, -1))} className="p-2 bg-indigo-600 text-white rounded"><Undo2 className="h-4 w-4" /></button>
-                <button onClick={() => { setPolygonsRight([]); setCurrentPointsRight([]); }} className="p-2 bg-indigo-600 text-white rounded"><RotateCw className="h-4 w-4" /></button>
-                <button disabled={isLoading} onClick={() => handleDeletePolygon(undefined, 'right')} className="p-2 bg-rose-600 hover:bg-rose-700 text-white rounded" title="Delete Last Polygon"><Trash2 className="h-4 w-4" /></button>
+          {/* Canvas Actions Toolbelt */}
+          <div className="flex flex-col gap-2 mt-3 bg-slate-900/30 p-2 border border-slate-800/80 rounded-lg">
+            <div className="flex flex-wrap items-center gap-1.5 w-full justify-between">
+              <div className="flex flex-wrap items-center gap-1">                
+                <button disabled={isLoading} onClick={() => setIsSegmentingRight(!isSegmentingRight)} className={`p-2.5 rounded-lg active:scale-95 transition-transform ${isSegmentingRight ? 'bg-red-600' : 'bg-indigo-600'} text-white touch-manipulation`} title="Toggle Segment Draw">
+                  {isSegmentingRight ? <X className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
+                </button>
+                <button onClick={() => setZoomRight(1)} className="p-2.5 bg-indigo-600 active:bg-indigo-700 text-white rounded-lg active:scale-95 transition-transform touch-manipulation" title="Reset Zoom"><Maximize2 className="h-4 w-4" /></button>
+                <button onClick={() => setCurrentPointsRight(p => p.slice(0, -1))} className="p-2.5 bg-indigo-600 active:bg-indigo-700 text-white rounded-lg active:scale-95 transition-transform touch-manipulation" title="Undo Last Node Point"><Undo2 className="h-4 w-4" /></button>
+                <button onClick={() => { setPolygonsRight([]); setCurrentPointsRight([]); }} className="p-2.5 bg-indigo-600 active:bg-indigo-700 text-white rounded-lg active:scale-95 transition-transform touch-manipulation" title="Clear Canvas States"><RotateCw className="h-4 w-4" /></button>
+                <button disabled={isLoading} onClick={() => handleDeletePolygon(undefined, 'right')} className="p-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg active:scale-95 transition-transform touch-manipulation" title="Delete Last Polygon"><Trash2 className="h-4 w-4" /></button>
               </div>
 
-              <div className="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-md border border-slate-800">
-                <ZoomOut className="h-3.5 w-3.5 text-slate-400" />
-                <input type="range" min="1" max="4" step="0.1" value={zoomRight} onChange={(e) => setZoomRight(parseFloat(e.target.value))} className="w-24 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
-                <ZoomIn className="h-3.5 w-3.5 text-slate-400" />
-                <span className="text-[10px] font-mono text-slate-400 w-8">{Math.round(zoomRight * 100)}%</span>
-              </div>
-
-              <button onClick={() => setClickToZoomRight(prev => !prev)} className={`px-2.5 py-1 rounded text-[10px] font-semibold ${clickToZoomRight ? 'bg-emerald-600' : 'bg-slate-700'} text-white`}>
+              <button onClick={() => setClickToZoomRight(prev => !prev)} className={`px-2.5 py-2 rounded-lg text-[10px] font-bold active:scale-95 transition-all select-none ${clickToZoomRight ? 'bg-emerald-600/90 text-white' : 'bg-slate-800 text-slate-400'} touch-manipulation`}>
                 Click Zoom {clickToZoomRight ? 'On' : 'Off'}
               </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-1 w-full">
+              <div className="flex items-center gap-2 bg-slate-900 px-2 py-1.5 rounded-lg border border-slate-800 flex-1 max-w-[220px]">
+                <ZoomOut className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                <input type="range" min="1" max="4" step="0.1" value={zoomRight} onChange={(e) => setZoomRight(parseFloat(e.target.value))} className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                <ZoomIn className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                <span className="text-[10px] font-mono text-slate-400 w-8 text-right shrink-0">{Math.round(zoomRight * 100)}%</span>
+              </div>
 
               {currentPointsRight.length >= 3 && (
-                <button disabled={isLoading} onClick={() => saveCurrentShape('right')} className="px-2.5 py-1.5 bg-green-600 text-white rounded text-xs font-bold flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Save</button>
+                <button disabled={isLoading} onClick={() => saveCurrentShape('right')} className="px-3 py-1.5 bg-green-600 active:bg-green-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 active:scale-95 transition-transform animate-pulse touch-manipulation"><Check className="h-3.5 w-3.5" /> Save</button>
               )}
             </div>
           </div>
